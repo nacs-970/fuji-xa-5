@@ -54,6 +54,9 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 44 | Scratch script `button_watch.py`, read-only: live view with the PC preview (its Focus button switched off), the property list read about 10 times a second and the event port listened to for 75 s, printing only changes. The owner pressed the shutter (half-press), Q, DISP/BACK and Menu. The owner said "ready for button" | `xa5-probe` | **No property changed and no event arrived** in 75 s (22 properties in the list). None of the camera's buttons did anything for the session, as the owner saw it; a half-press of the shutter woke the black screen. The owner also tried Space and the page's Focus button: they were refused (HTTP 500) as designed. The session ended normally. See "Camera buttons" |
 | 45 | Scratch script `focus_cell.py`: live view with the PC preview, vendor operation `0x9026` with the parameter `0x03020303` (column 3, row 3) held 4 s, `0x9027`, the live-view frame headers recorded, then the read-only vendor operation `0x902B` with no parameters. No photo. The owner said "ready, yes vendor" | `xa5-probe` | `0x9026` with the parameter answered `0x2001`, `0xD209` went 0 to 1 within 0.3 s and back to 0 after `0x9027`, as with no parameter. **The frames did not sharpen**: the edge strength of every 80 px cell changed by 1 or less between the frame before the lock and the one at its end. The owner answered "yes, yes" to my questions whether the lens moved and whether the preview sharpened (I read it that way; the question about an object in the cell was not answered separately), so the two frames I sampled may have missed it. The frame header: bytes 4 and 5 after the length are a 16-bit frame counter, the other 12 bytes were 0 in all 1151 frames, so the header carries no autofocus information. **`0x902B` answered `0x2001` with 360 bytes: 10 property descriptions**, with ranges and allowed values (see "Property descriptions"). The session ended normally |
 | 46 | `fuji-xa -v serve --seconds 90` with the new page: a green square for the camera's focus point, click on the picture to focus there, Space and a Focus button. About 50 clicks and a few presses of Space. The owner said "ready, yes vendor" | `xa5-probe` | Every `0x9026` (with a cell, or none for Space) and `0x9027` answered `0x2001`; the lock answered in 0.00 to 0.43 s, the release in up to 1.09 s. The session ended normally. The owner: the square appeared and jumped to the clicked cell; **the lens focused at the clicked point**; the square stayed on the cell after the release; Space and the Focus button, which sent no cell, **moved the point to the centre** and focused there; the preview stuttered for the first few seconds. **Choosing the focus point from the PC works.** See "Choosing the focus point" |
+| 47 | `fuji-xa -v serve --seconds 90` with the coloured square (white until focused, green, red; the square jumps at once on a click), property list read every 0.25 s. The owner said "ready, yes vendor" | `xa5-probe` | About 60 locks and releases, all answered `0x2001`, session ended normally. `0xD209` went 0 to 1 between 0.7 and 1.7 s after the lock was sent and back to 0 about 0.2 to 0.5 s after the release; a click let go within about 0.7 s never reached 1; **it was never 2**. The owner: **the square needed 1 to 2 s to turn green while the camera beeped after about 0.5 s**, and **in AF-C the lens did not keep refocusing while Space, the Focus button or the mouse was held and the camera was moved**. Not reported: red, a plain wall, the stutter. See "Green delay and AF-C" |
+| 48 | `fuji-xa -v serve --seconds 100` with the property list read every 0.1 s and the page sending `0x9026` again every second while Space, the Focus button or the mouse was held; raw log saved. The owner said "ready, yes vendor" | `xa5-probe` | 17 locks and 4 releases, **every `0x9026` and `0x9027` answered `0x2001`**; repeats took 0.00 s, or 1.2 to 2.1 s when the camera was already locked. **`0x1015` took 0.6 to 2.5 s to answer while the camera was focusing, and `0xD209` turned 1 in the same moment the slow read returned.** The owner: **the lens refocused when the camera moved**, green came sooner, but the preview stutters until the focus completes; no red. **The session ended by itself** about 5 s after the last release: no live-view frame for 5 s, the close timed out (`cleanup failed: timed out`), `fuji-xa: no live-view frame arrived`. The owner saw the **camera return to its normal live preview after it disconnected**. See "Green delay and AF-C" |
+| 49 | `fuji-xa -v serve --seconds 120` with the repeat every 2 s by default and `?every=1` and `?every=3` in the page address; raw log saved. The owner said "ready, yes vendor" | `xa5-probe` | 23 holds, every `0x9026` and `0x9027` answered `0x2001`, **the session ended normally** (`0x1018`, `0x1003`), and the run-48 drop did not come back. `0xD209` turned 1 within 0.48 to 0.67 s of the lock in 4 holds, after 0.9 to 5.4 s in 11, and 8 holds were let go before it turned green; 54 of 461 property reads took over 0.3 s (up to 2.5 s). The owner: **`?every=1` updates the focus fastest and `?every=3` slowest; green is closer to the camera's beep than before; the camera screen is black after the session, as after every normal one**; no red. See "Green delay and AF-C" |
 
 Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 to 35. Runs 36 and 37 took one each. Run 38 took none, run 39 one and runs 40 to 46 none.
 
@@ -393,6 +396,13 @@ as the official app does for a tap (APK finding). `0x9027` with no parameter rel
   sends the point back to the centre. That change was tested on the fake camera only.
 - `Camera.focus((column, row))` and the page's click-to-focus are the library side of this. The grid, 13 by 7, is a constant
   taken from the camera's `0xD17C` range maximum (run 45); another body may differ.
+- **`0xD209` is the colour of the camera's focus frame.** The app's code (APK finding) draws its focus frame white for 0,
+  green for 1 (focused, locked) and red for 2 (focus failed), and it also tells the camera's S1 lock state from it. That
+  fits what we saw (0 at rest, 1 for the whole lock, never 2 or 3) and replaces my guess in run 38 that 1 meant busy. A
+  value of 2 has not been seen yet: a click on a plain wall would be the way to try it.
+- After run 46 the page's square was changed: it jumps to the clicked cell at once, stays white while the camera has not
+  focused, turns green on `0xD209` = 1 and red on 2, and the page reads the camera four times a second now. Run 47 tried
+  it on the camera: white and green work, green comes late, red was not seen (see "Green delay and AF-C").
 - The preview stuttered for the first few seconds of run 46. Earlier runs also showed dips (24 to 27 fps, and 16.6 fps on
   the first client). The page now also reads the camera's property list twice a second, which might add to it. Not measured.
 
@@ -403,6 +413,56 @@ X-A5 answered `0x200A` for `0xD208` over Wi-Fi (2026-10-04), so `0x9026` may be 
 libgphoto2 issue in a fork says Fuji sets the point by a grid index (`0xD347`, grid `0xD025`), which is not confirmed on
 this camera. The Go package lists focus mode `0x0001` as manual focus, which would stop the camera hunting. Writing
 `0x500A` on the X-A5 is not tried.
+
+## Green delay and AF-C (run 47)
+
+The owner's account of the coloured square:
+- **Green came 1 to 2 s after the click, the camera's beep about 0.5 s after it** (the owner's estimate). The log fits the late
+  green: `0xD209` turned 1 between 0.7 and 1.7 s after the lock was sent, and a click let go within about 0.7 s never
+  reached 1 (the release cancelled the focus first). Our own reading added up to 0.25 s (property list) plus up to 0.25 s
+  (page), so the property seems to lag the beep, but how much of the delay is our reading rate is not known. Not known
+  either whether the beep is the camera's "focus found" signal.
+- **One lock does not follow a moving subject in AF-C.** The owner held Space, the Focus button and the mouse while moving
+  the camera, and the lens stayed where the first lock put it. One `0x9026` looks like one focus action whatever the AF mode
+  (`0x500A` reads the same in AF-S and AF-C, runs 18 and 19). The S1 code of the official app (APK finding) has no AF-C case
+  that I found.
+- Not reported: red, a click on a plain wall, the stutter. Red (`0xD209` = 2) has still never been seen.
+- The camera started the session with its focus point at column 4, row 5, not the centre: it remembers the last point.
+
+Changes after run 47 (the library and the page read the camera ten times a second, was four; the page sends "down" again
+every second while a key or the mouse is held and the library sends `0x9026` again each time; the 10 s watchdog counts from
+the last "down") were tried in run 48:
+- **A repeated lock makes the lens follow.** The owner moved the camera and the lens refocused. The camera answered every
+  repeat `0x2001`. The price: the preview stutters while the camera focuses, and with a repeat every second it focuses nearly
+  all the time. The page now repeats every 2 s and takes `?every=1` or `?every=3` in its address (seconds), one repeat at a
+  time. Fake camera and page script only. Not tried on the camera.
+- **Why green comes late, from the log.** While the camera focuses it answers the property-list read (`0x1015`) only after
+  0.6 to 2.5 s, and `0xD209` showed 1 in the same read. The lock itself is answered at once. So the delay is the camera's
+  answer time, and reading faster does not help. Not tried: reading `0xD209` alone (`0x1015` with that property) during the
+  focus, which might be answered sooner.
+- **`0xD209` did not go back to 0 on a repeat.** It stayed 1 from the first green until the release, even when the repeat
+  refocused. So it is "locked", not "focused right now".
+- **The session ended by itself.** After the last release (a lock at the centre cell that never turned green, let go after
+  0.9 s) the camera sent no live-view frame for 5 s, then did not answer the close. The owner saw the camera show its normal
+  live preview afterwards, not the black screen of every earlier session. The owner pressed nothing on the camera. It may be
+  the repeated locks (17 locks for 4 releases, never seen before), or something else: one run only. If it comes back
+  with the 2 s repeat, the repeats are suspect. **Idea, not tried:** the black screen after a session may come from how we
+  close (`0x1018`, `0x1003`), since a session the camera ended itself left no black screen. Closing the sockets without them,
+  on purpose, would show it.
+- `serve` does not say when its reading thread stops: it ends silently on the first error. Not changed.
+
+Run 49 (the page repeats every 2 s, `?every=1` and `?every=3` tried in one session):
+- **The interval sets how fast the lens follows:** 1 s fastest, 3 s slowest (owner). Which one stutters least was not reported.
+  The default stays 2 s.
+- **Green is closer to the beep.** The log agrees only in part: 4 of 15 holds turned green within 0.7 s, the others took 0.9
+  to 5.4 s, and 54 of 461 property reads still took over 0.3 s. Whether the rest is a camera that is slow to focus or slow to
+  report is not known.
+- **The drop of run 48 did not come back** (one 120 s session, 23 holds, the same repeated locks), so it is not shown to
+  come from them.
+- **The black screen came back after this normal close**, and run 48's session, which the camera ended itself, left the
+  live preview. That fits the idea that our close (`0x1018`, `0x1003`) leaves the black screen, but it is two sessions.
+  Still not tried on purpose.
+- Red was not seen again.
 
 ## Camera settings (run 18)
 

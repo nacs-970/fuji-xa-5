@@ -34,6 +34,7 @@ OK = 0x2001
 P_EVENTS, P_CAMERA_STATE, P_CLIENT_STATE = 0xD212, 0xDF00, 0xDF01
 P_IMAGE_GET_VER, P_GET_OBJ_VER, P_REMOTE_VER, P_REMOTE_GET_OBJ_VER = 0xDF21, 0xDF22, 0xDF24, 0xDF25
 P_OBJECT_COUNT, P_CORRECT_FILE_SIZE = 0xD222, 0xD227
+P_FOCUS_COLOUR = 0xD209  # the colour of the camera's focus frame: 0 white, 1 green (focused), 2 red (failed), per the app
 P_FOCUS_POINT = 0xD17C   # the app calls it S1 lock: aspect width, aspect height, column, row
 GRID = (13, 7)           # columns and rows of the autofocus grid, from the property's range maximum (run 45)
 REMOTE_MODE, IMAGE_VIEW_MODE, REMOTE_VERSION = 5, 11, 0x2000C
@@ -286,6 +287,9 @@ class Camera:
         On the X-A5 the lens focused at the chosen cell and the focus point stayed there after the release (owner, run 46).
         Without `cell` the camera moves the point to the centre and focuses there. (Writing 0xD17C does neither.)
 
+        Calling it again while held sends the lock again. The owner saw that one lock does not follow a moving subject in AF-C
+        (run 47). A lock sent again every second made the lens follow, and made the preview stutter (run 48).
+
         Call `release_focus()` afterwards (`close()` does it too). Public notes say an X-T3 over USB stops focusing while it is held.
         """
         params = ()
@@ -297,11 +301,10 @@ class Camera:
             params = (aspect << 16 | column << 8 | row,)
         self.start_live()
         with self._focus_lock:   # the preview page sends "down" and "up" from two threads, quick clicks raced (run 41)
-            if not self._locked:
-                self.op(0x9026, params)
-                self._locked = True
-                if params:
-                    self.props[P_FOCUS_POINT] = params[0]   # the camera reads it back; this keeps a quick next press in step
+            self.op(0x9026, params)   # sent again while held: the page does this every second to make the lens follow (run 47)
+            self._locked = True
+            if params:
+                self.props[P_FOCUS_POINT] = params[0]   # the camera reads it back; this keeps a quick next press in step
 
     def release_focus(self):
         """Let go of the half press (operation 0x9027). Does nothing if `focus()` was not called."""

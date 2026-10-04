@@ -12,17 +12,27 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import GRID, P_FOCUS_POINT, Camera, FujiError
+from . import GRID, P_FOCUS_COLOUR, P_FOCUS_POINT, Camera, FujiError
 
 PAGE = b"""<!doctype html><meta charset="utf-8"><title>fuji-xa</title>
 <body style="margin:0;background:#000;color:#fff;font:16px sans-serif">
 <div id=wrap style="position:relative"><img id=img src="/stream" draggable=false style="width:100%;display:block">
-<div id=pt style="position:absolute;border:2px solid #0f0;box-sizing:border-box;pointer-events:none;display:none"></div></div>
-<p style="margin:8px">Click the picture to focus there, or hold <b>Space</b> or the button to focus at the green square. The lens focuses while you hold, and keeps it when you let go.
+<div id=pt style="position:absolute;border:3px solid #fff;box-shadow:0 0 0 1px #000,inset 0 0 0 1px #000;box-sizing:border-box;pointer-events:none;display:none"></div></div>
+<p style="margin:8px">Click the picture to focus there, or hold <b>Space</b> or the button to focus at the square. White: not focused. Green: focused. Red: focus failed. The lens keeps its focus when you let go.
 <button id=f style="font-size:20px;padding:8px 24px">Focus</button></p>
 <script>
-let down = false, chain = Promise.resolve(), area = null;   // "up" is sent only after "down" was answered
-const press = (d, q) => { if (d !== down) { down = d; chain = chain.then(() => fetch("/focus/" + (d ? "down" : "up") + (q || ""), {method: "POST"})).catch(() => {}); } };
+let down = false, query = "", chain = Promise.resolve(), area = null;   // "up" is sent only after "down" was answered
+const post = path => { chain = chain.then(() => fetch(path, {method: "POST"})).catch(() => {}); };
+const press = (d, q) => { if (d !== down) { down = d; query = q || ""; post(d ? "/focus/down" + query : "/focus/up"); } };
+// held: lock again every 2 s (page address ?every=1 for 1 s), so the lens follows a moving subject. The camera stutters while it
+// focuses, so a short time is quicker to follow and rougher to watch. This also keeps the server's 10 s watchdog away.
+const every = 1000 * (new URLSearchParams(location.search).get("every") || 2);
+let busy = false;   // one repeat at a time: the camera answers a lock late while it focuses
+setInterval(() => {
+  if (!down || busy) return;
+  busy = true;
+  chain = chain.then(() => down && fetch("/focus/down" + query, {method: "POST"})).catch(() => {}).then(() => { busy = false; });
+}, every);
 const f = document.getElementById("f"), img = document.getElementById("img"), pt = document.getElementById("pt");
 f.onpointerdown = () => press(true);
 for (const e of ["pointerup", "pointerleave", "pointercancel"]) f.addEventListener(e, () => press(false));
@@ -30,27 +40,39 @@ addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault();
 addEventListener("keyup", e => { if (e.code === "Space") press(false); });
 addEventListener("blur", () => press(false));
 // the autofocus grid lies over the picture (aspect aw:ah), which sits in the middle of the 4:3 live-view frame
+let last = null, pending = null;   // pending: the cell just clicked, shown at once in white until the camera reports it
 function layout(s) {
   const W = img.clientWidth, H = W * 3 / 4, wide = s.aw / s.ah >= 4 / 3;
   const w = wide ? W : H * s.aw / s.ah, h = wide ? W * s.ah / s.aw : H;
   return {x: (W - w) / 2, y: (H - h) / 2, w, h, cols: s.cols, rows: s.rows};
 }
+function draw(col, row, colour) {
+  area = layout(last);
+  pt.style.display = "block"; pt.style.borderColor = colour;
+  pt.style.left = area.x + (col - 1) * area.w / area.cols + "px"; pt.style.top = area.y + (row - 1) * area.h / area.rows + "px";
+  pt.style.width = area.w / area.cols + "px"; pt.style.height = area.h / area.rows + "px";
+}
+// the camera's 0xD209 is the colour of its focus frame: 0 white, 1 green (focused), 2 red (focus failed)
+const COLOURS = ["#fff", "#0f0", "#f00"];
 async function refresh() {
   try {
     const s = await (await fetch("/state")).json();
     if (!s.col) return;
-    area = layout(s);
-    pt.style.display = "block";
-    pt.style.left = area.x + (s.col - 1) * area.w / s.cols + "px"; pt.style.top = area.y + (s.row - 1) * area.h / s.rows + "px";
-    pt.style.width = area.w / s.cols + "px"; pt.style.height = area.h / s.rows + "px";
+    last = s;
+    if (pending && ((s.col === pending.col && s.row === pending.row) || Date.now() - pending.t > 2000)) pending = null;
+    if (pending) draw(pending.col, pending.row, "#fff");
+    else draw(s.col, s.row, COLOURS[s.af] || "#fff");
   } catch (e) {}
 }
-setInterval(refresh, 500); refresh();
+setInterval(refresh, 100); refresh();
 img.onpointerdown = e => {
   if (!area) return;
   const r = img.getBoundingClientRect(), x = e.clientX - r.left - area.x, y = e.clientY - r.top - area.y;
   if (x < 0 || y < 0 || x >= area.w || y >= area.h) return;
-  press(true, "?cell=" + (Math.floor(x / area.w * area.cols) + 1) + "," + (Math.floor(y / area.h * area.rows) + 1));
+  const col = Math.floor(x / area.w * area.cols) + 1, row = Math.floor(y / area.h * area.rows) + 1;
+  pending = {col, row, t: Date.now()};
+  draw(col, row, "#fff");
+  press(true, "?cell=" + col + "," + row);
 };
 img.onpointerup = img.onpointerleave = img.onpointercancel = () => press(false);
 </script>"""
@@ -59,7 +81,8 @@ img.onpointerup = img.onpointerleave = img.onpointercancel = () => press(false);
 def serve(cam, host, port, seconds=None):
     """Live view as an MJPEG stream: open http://HOST:PORT/ in a browser. Runs until Ctrl-C or `seconds`.
 
-    The page shows the camera's focus point (a green square from property 0xD17C, read twice a second). Click the picture
+    The page shows the camera's focus point as a square (property 0xD17C, read ten times a second): white until the
+    camera has focused, green when it has, red when focusing failed (property 0xD209, the app's "S1 lock colour"). Click the picture
     to focus there (Camera.focus with a cell, worked on the X-A5, run 46), or hold the Focus button or Space to focus at the
     square again (a lock without a cell would move the point to the centre).
 
@@ -79,7 +102,7 @@ def serve(cam, host, port, seconds=None):
         srv.shutdown()
 
     def poll():   # keep the focus point fresh for the page
-        while not stop.wait(0.5):
+        while not stop.wait(0.1):
             try:
                 cam.events()
             except (FujiError, OSError):
@@ -90,7 +113,7 @@ def serve(cam, host, port, seconds=None):
             if self.path == "/state":
                 point = cam.props.get(P_FOCUS_POINT)
                 state = {} if point is None else {"aw": point >> 24, "ah": point >> 16 & 255, "col": point >> 8 & 255,
-                                                   "row": point & 255, "cols": GRID[0], "rows": GRID[1]}
+                                                   "row": point & 255, "cols": GRID[0], "rows": GRID[1], "af": cam.props.get(P_FOCUS_COLOUR, 0)}
                 body = json.dumps(state).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -130,7 +153,10 @@ def serve(cam, host, port, seconds=None):
                     elif point:   # no click: focus at the square, not at the centre
                         cell = (point >> 8 & 255, point & 255)
                     cam.focus(cell or None)
-                    timer = threading.Timer(10, let_go)   # the browser never said "up" (tab closed, key held)
+                    for old in hold:   # the page repeats "down" every second while held: 10 s after the last one, let go
+                        old.cancel()
+                    hold.clear()
+                    timer = threading.Timer(10, let_go)   # the browser never said "up" (tab closed)
                     timer.daemon = True
                     timer.start()
                     hold.append(timer)

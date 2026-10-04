@@ -107,7 +107,7 @@ Poll it as a substitute for events on the control connection.
 | `0xD240` | shutter speed | `0x80030D40` for 1/200 (run 18), `0x8000EA60` for 1/60 (run 19) and `0x8007A120` for 1/500 (run 20, set by the owner). and `0x800186A0` for 1/100 (run 21, set by the owner). All fit: low part = denominator x 1000 (200000, 60000, 500000, 100000). In run 19 the owner had set 1/100 on the camera (dial on M) and the screen showed 1/60 after the session. Who changed it is not known. Four data points, fractions of a second only. The top bit was set in all three and is not understood. In run 20 the screen showed 1/500 before and after the session, so the session does not change the speed |
 | `0xD17C` | focus point position (libgphoto2 names it FocusMeteringMode) | 4 bytes `03 02 CC RR`: `CC` = column 1 to 13 (left to right), `RR` = row 1 to 7 (top to bottom), a 13 x 7 grid of 91 points. Single point: top-left `0x03020101`, top-right `0x03020D01`, bottom-right `0x03020D07`, centre with DISP/BACK `0x03020704` (runs 31 to 34). A hand-set "centre" and ZONE read `0x03020804`. The high bytes `03 02` never changed. The official app's code (APK 4.10.2, [finding](../findings/2026-10-05-apk-analysis.md)) calls this property S1 lock and shows they are the picture aspect, 3:2, and that the app's touch focus sends one integer in this same layout to `0x9026`: the app's native code sends operation `0x9026` with that integer as its one parameter and no data, and `0x9027` with none: not yet tried with the parameter To move the focus point, send it as the parameter of `0x9026` (section 6), not as a write. A write of the 4 bytes was accepted (`0x2001`) and the change list followed it (runs 35 to 37), but the focus frame stayed at the centre and the photo's `FocusPixel` metadata (2983, 1983) shows autofocus ran at the centre: the write is ignored |
 | `0x500A` | focus mode (name from standard PTP) | `0x8001` with the owner's camera set to AF-S (run 18) and to AF-C (run 19). It does not tell them apart |
-| `0xD209` | AF status (libgphoto2 name) | 0 at rest. 1 after vendor op `0x9026`, back to 0 after `0x9027` (run 38). libgphoto2 reads 1 as busy, 2 ok, 3 failed over USB: not checked here, we read it once after 3 s and saw 1 |
+| `0xD209` | colour of the camera's focus frame (the app calls it S1 lock colour; libgphoto2 calls it AF status) | From the official app's code ([APK finding](../findings/2026-10-05-apk-analysis.md)): 0 white (not focused, unlocked), 1 green (focused, locked), 2 red (focus failed). Observed: 0 at rest, 1 some time after `0x9026` until `0x9027` (runs 38 to 47, which fits green = focused). In run 47 it turned 1 between 0.7 and 1.7 s after the lock was sent, read every 0.25 s, while the owner heard the camera beep after about 0.5 s. 2 has not been seen yet. On USB cameras libgphoto2 reads 1 as busy, 2 ok, 3 failed |
 | `0x500C` | flash mode | 2 while the built-in flash was closed (it must be popped up by hand on this camera). In standard PTP 2 is flash off |
 | `0x500E` | exposure mode | 1 with the mode dial on M in runs 18 and 19 (the owner first said auto, then corrected it). In standard PTP 1 is manual, which fits. One value only |
 | `0x5010` | exposure bias (name from standard PTP) | 0. The owner did not give the camera's setting |
@@ -215,6 +215,22 @@ with and without a download, and also when the connection started, before any sh
 live view only (no shot, no download) showed the same: black with the LED blinking from the start of the
 connection to its end. So it is the camera's state during a Wi-Fi remote session, not an effect of the
 shutter or of a download (observed 2026-10-05).
+
+**Vendor operations the official app uses (read from its native code, APK finding, 2026-10-05).** "Tried" means we sent it to the X-A5.
+
+| Operation | App function | Parameters | Data | Tried |
+|-----------|--------------|------------|------|-------|
+| `0x9020` / `0x9021` | start / stop movie | 2 / 1 (values not known: the Java side passes none, the native code takes them from a stored setting) | none | no |
+| `0x9022` | GetPostview | none | data in: the picture just taken, to show it at once | no |
+| `0x9023` / `0x9024` / `0x9025` | step zoom / start zoom / stop zoom | 2 / 2 / none (direction and a step or speed, meaning not known) | none | no. Needs a power-zoom lens |
+| `0x9026` / `0x9027` | lock / unlock S1 (half press) | 1 (aspect, column, row) / none | none | yes, runs 38 to 49 |
+| `0x902B` | all property descriptions | none | data in | yes, run 45 |
+| `0x902C` / `0x902D` / `0x902E` | step shutter speed / F-number / exposure bias | 1 each: 0 or 1 (the left or right button of the app's ring, which one raises the value is not known) | none | no |
+| `0x9030` | cancel capture | none | none | no |
+| `0x9040` / `0x9041` / `0x9042` | **firmware update**: send object info (a file named `FUP_FILE.DAT` and its size) / send object / send part | | data out | **never send** |
+
+The app's step buttons act on `0xD240` (shutter speed), `0x5007` (F-number) and `0x5010` (exposure bias). Direct writes of the first two were refused (runs 21 and 22), so the step operations are the likely way to change them.
+The firmware update path also sets `0xDF01` = 19 and writes the version property `0xDF27` before it sends anything. The model list in the app marks the X-A5 as not supporting a firmware update through the app.
 
 ## 7. Ending a session
 

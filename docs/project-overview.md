@@ -46,6 +46,7 @@ The protocol is documented in [protocol/wifi.md](protocol/wifi.md).
 | libgphoto2 `Fuji X (WLAN)` driver | fails: random GUID, and a second init after the ack |
 | Settings (ISO, aperture, film simulation) | not started |
 | Native analysis with Ghidra/REA | not run, tools not installed ([plan 06](plans/06-ghidra-rea-native-analysis.md)) |
+| The official app's code (APK, jadx, `llvm-objdump`) | read ([finding](findings/2026-10-05-apk-analysis.md)): focus-point parameter, `0x902B`, vendor operation table (postview `0x9022`, zoom, step operations, movies; none tried). `0x9040` to `0x9042` are the firmware update: never send them |
 
 The goal is not new. [libfuji](https://github.com/petabyt/libfuji) and its app Fudge already cover this
 protocol on other bodies. Nobody found names the X-A5. Our contribution is X-A5 evidence, a small clean
@@ -61,7 +62,7 @@ client and a path into libgphoto2. See the [prior art survey](findings/2026-10-0
 | `scripts/` | probe tools and the Wi-Fi wrapper |
 | `tests/fake_camera/` | fake camera used to test scripts without hardware |
 | `captures/`, `artifacts/` | raw evidence and downloaded tools, git-ignored |
-| `src/fuji_xa/` | Python library and `fuji-xa` command (plan 07). `preview`, `serve`, `shoot`, `download` and `props` ran on the real camera. `set` was refused by the camera. The Focus button of `serve` and `Camera.focus()` ran on the real camera (runs 41 to 43). The focus-point square and click-to-focus ran on the real camera (run 46). The Focus button now locks at the square (fake camera only) |
+| `src/fuji_xa/` | Python library and `fuji-xa` command (plan 07). `preview`, `serve`, `shoot`, `download` and `props` ran on the real camera. `set` was refused by the camera. The Focus button of `serve` and `Camera.focus()` ran on the real camera (runs 41 to 43). The focus-point square and click-to-focus ran on the real camera (run 46); its white and green colours worked in run 47, but green comes 1 to 2 s after the camera's beep and red was never seen. The Focus button locks at the square (the camera accepted every such lock in run 47). A held key or button sends the lock again every 2 s so that the lens follows in AF-C (it followed in runs 48 and 49: `?every=1` fastest, `?every=3` slowest, the preview stutters while the camera focuses; 2 s is the default) |
 
 ## Version control
 

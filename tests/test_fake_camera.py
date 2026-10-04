@@ -9,9 +9,12 @@ import contextlib
 import io
 import json
 import os
+import re
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -20,7 +23,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "src"))
 sys.path.insert(0, os.path.join(HERE, "fake_camera"))
 from fake_fuji_camera import FAKE_JPEG  # noqa: E402
 from fuji_xa import Camera, FujiError  # noqa: E402
-from fuji_xa.__main__ import main, serve  # noqa: E402
+from fuji_xa.__main__ import PAGE, main, serve  # noqa: E402
 
 
 def test_live_shoot_download():
@@ -76,6 +79,20 @@ def fetch(port, path, frames=0):
         data += chunk
     s.close()
     return data
+
+
+def test_page_script():
+    """The focus square on the preview page: jumps at once on a click, white until focused, green, red (needs node)."""
+    node = shutil.which("node")
+    if not node:
+        print("node not installed, page script test skipped")
+        return
+    page = re.search(rb"<script>(.*)</script>", PAGE, re.S).group(1)
+    with tempfile.NamedTemporaryFile(suffix=".js") as script:
+        script.write(page)
+        script.flush()
+        run = subprocess.run([node, os.path.join(HERE, "page_test.js"), script.name], capture_output=True, text=True)
+    assert run.returncode == 0 and "FAIL" not in run.stdout, run.stdout + run.stderr
 
 
 def free_port():
@@ -137,8 +154,11 @@ def test_focus():
             started = threading.Event()          # a release that arrives while the lock is still being sent (run 42)
             real_op = cam.op
 
+            locks = []
+
             def op(code, *args, **kwargs):
                 if code == 0x9026:
+                    locks.append(args)
                     started.set()
                 return real_op(code, *args, **kwargs)
 
@@ -152,11 +172,13 @@ def test_focus():
             cam.release_focus()
             cam.focus((5, 2))                    # a chosen cell: operation 0x9026 with one number, aspect 3:2, column, row
             assert cam.events()[0xD17C] == 0x03020502
+            cam.focus((5, 2))                    # held: the page sends the lock again every second, the camera gets it again
+            assert len(locks) == 3, locks        # the race lock, then these two
             cam.release_focus()
             assert b" 204 " in post(port, "/focus/down?cell=3,3")   # a click on the picture
             assert cam.events()[0xD17C] == 0x03020303
             state = json.loads(fetch(port, "/state").split(b"\r\n\r\n", 1)[1])
-            assert state == {"aw": 3, "ah": 2, "col": 3, "row": 3, "cols": 13, "rows": 7}, state
+            assert state == {"aw": 3, "ah": 2, "col": 3, "row": 3, "cols": 13, "rows": 7, "af": 1}, state   # 1 = locked, shown green
             assert b" 204 " in post(port, "/focus/up")
             assert cam.events()[0xD17C] == 0x03020303      # the point stays after the release
             assert b" 204 " in post(port, "/focus/down")   # the Focus button: at the square, not at the centre
@@ -183,4 +205,5 @@ if __name__ == "__main__":
     test_live_shoot_download()
     test_serve()
     test_focus()
+    test_page_script()
     print("ok")

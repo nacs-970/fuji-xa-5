@@ -26,6 +26,12 @@ the evidence layout.
   read (`fuji-xa props`, property `0xD17C`), and a write of it is accepted and ignored. The vendor operation `0x9026` starts the camera's autofocus from the PC (the lens moves,
   `0xD209` goes to 1) and `0x9027` releases it, at the camera's own point, not one we write (runs 38 to 40). The official app's code (read from its APK, [finding](docs/findings/2026-10-05-apk-analysis.md)) showed that touch focus is `0x9026` with one number: picture aspect, column, row, the same layout as `0xD17C`. We tried it and the lens focuses at the chosen cell (runs 45 and 46). To see where autofocus ran,
   read the photo's metadata (see [Useful tools](#useful-tools)). See [protocol notes](docs/protocol/wifi.md) section 6.
+- **The official app's code was read** (APK from the owner's phone, jadx and `llvm-objdump`, nothing sent to the camera,
+  [finding](docs/findings/2026-10-05-apk-analysis.md)). It gave the focus-point parameter, the property descriptions
+  (`0x902B`), and a table of the app's vendor operations in the [protocol notes](docs/protocol/wifi.md) section 6: postview
+  (`0x9022`, the shot without downloading it), zoom, the step operations for shutter speed, F-number and exposure bias,
+  and movies, none of them tried yet. It also showed that `0x9040`, `0x9041` and `0x9042` are the **firmware update**
+  operations: never send them ([AGENTS.md](AGENTS.md)). Our start already matches the app's version handshake.
 - The protocol is written down in [docs/protocol/wifi.md](docs/protocol/wifi.md) (clean-room, with a status on
   every fact).
 - The goal is **not new**: [libfuji](https://github.com/petabyt/libfuji) (MIT, C, active) and its Android app
@@ -63,7 +69,7 @@ and the disk budget.
 | 02 | [USB unknown vendor ops](docs/plans/02-usb-unknown-vendor-ops.md) | no | **sends vendor commands** | **closed**: ops are firmware file-write ops, do not probe |
 | 03 | [Wi-Fi test with libgphoto2](docs/plans/03-wifi-gphoto2-test.md) | no | takes a photo | **remote mode, live view, shutter and download work** with our script; libgphoto2 still fails on a bug ([finding](docs/findings/2026-10-04-wifi-session-probe.md)) |
 | 04 | [Wi-Fi traffic capture](docs/plans/04-wifi-traffic-capture.md) | `tcpdump`, `wireshark-cli` | no (app drives it) | not started |
-| 05 | [APK static analysis](docs/plans/05-apk-static-analysis.md) | `jadx` | no | not started |
+| 05 | [APK static analysis](docs/plans/05-apk-static-analysis.md) | `jadx` | no | **done 2026-10-05** ([finding](docs/findings/2026-10-05-apk-analysis.md)) |
 | 06 | [Ghidra / REA native analysis](docs/plans/06-ghidra-rea-native-analysis.md) | Ghidra + JDK 21 | no | blocked: needs approval |
 | 07 | [Implementation](docs/plans/07-implementation.md) | depends | depends | waits for 03 to 06 |
 
@@ -83,7 +89,7 @@ docs/
 scripts/                       probe tools written for the plans (own code); `with_camera_wifi.sh` runs one command per fresh Wi-Fi join
 captures/                      raw logs and pcap files, git-ignored (see captures/README.md)
 artifacts/                     APKs, firmware, decompiler output, git-ignored (see artifacts/README.md)
-src/fuji_xa/                   Python library and `fuji-xa` command (preview, serve, shoot, download, props, set). Fake-camera tested. All of them ran on the real camera, except that `set` was refused by the camera. `Camera.focus()` and the Focus button on the `serve` page (click or hold Space = half press, autofocus at the camera's own point, focus shows in the preview in 1 to 2 s) ran on the real camera in runs 41 to 43. The page also draws the camera's focus point as a green square and lets you click the picture to focus at that cell (`Camera.focus((column, row))`): this worked on the real camera (run 46) ([finding](docs/findings/2026-10-05-library-first-real-run.md))
+src/fuji_xa/                   Python library and `fuji-xa` command (preview, serve, shoot, download, props, set). Fake-camera tested. All of them ran on the real camera, except that `set` was refused by the camera. `Camera.focus()` and the Focus button on the `serve` page (click or hold Space = half press, autofocus at the camera's own point, focus shows in the preview in 1 to 2 s) ran on the real camera in runs 41 to 43. The page also draws the camera's focus point as a square and lets you click the picture to focus at that cell (`Camera.focus((column, row))`): this worked on the real camera (run 46). The square is white until the camera has focused, green when it has and red when focusing failed, as the official app shows it (`0xD209`): it ran on the real camera in run 47, but green comes 1 to 2 s after the camera's beep and red was never seen. In AF-C one lock does not follow a moving subject, so the page sends the lock again every 2 s while a key or button is held (`?every=` in the address changes it, in seconds): the lens follows (runs 48 and 49, 1 s fastest, 3 s slowest), and the preview stutters while the camera focuses ([finding](docs/findings/2026-10-05-library-first-real-run.md))
 tests/                         fake camera test double (`tests/fake_camera/`) and `tests/test_fake_camera.py`; pcap replay comes with plan 07
 ```
 
