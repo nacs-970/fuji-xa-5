@@ -7,6 +7,7 @@ camera leaves wireless mode when the session ends.
     with Camera() as cam:
         cam.start_live()
         jpeg = cam.frame()           # 640x480 JPEG
+        cam.focus()                  # autofocus at the camera's own point, then cam.release_focus()
         cam.shoot()                  # WRITES TO THE SD CARD
         name, data = cam.download()  # the newest picture, full size
 
@@ -85,7 +86,9 @@ class Camera:
         self.tid = 0
         self.props = {}                    # last value of each property the camera reported as changed
         self._ctl = self._ev = self._vid = self._reader = None
-        self._session = self._viewing = False
+        self._session = self._viewing = self._locked = False
+        self._op_lock = threading.Lock()
+        self._focus_lock = threading.Lock()
         self._capture_tid = None           # transaction id of InitiateOpenCapture, needed to end it
         self._cond = threading.Condition()
         self._frame, self._frame_n, self._seen, self._dead = None, 0, 0, False
@@ -147,24 +150,26 @@ class Camera:
     def op(self, code, params=(), data=None, ok=(OK,), timeout=10.0):
         """Run one PTP operation. Returns (response code, data). Raises FujiError unless the code is in `ok`
         (`ok=None` accepts any code)."""
-        self.tid += 1
-        s = self._ctl
-        s.settimeout(timeout)
-        s.sendall(struct.pack("<IHHI", 12 + 4 * len(params), 1, code, self.tid)
-                  + b"".join(struct.pack("<I", p) for p in params))
-        if data is not None:
-            s.sendall(struct.pack("<IHHI", 12 + len(data), 2, code, self.tid) + data)
-        payload = b""
-        while True:
-            length, ctype, rcode, _ = struct.unpack("<IHHI", _recv(s, 12))
-            body = _recv(s, length - 12)
-            if ctype == 2:
-                payload += body
-            elif ctype == 3:
-                break
-            else:
-                raise FujiError(f"unexpected container type {ctype} after operation 0x{code:04x}")
-        log.debug("operation 0x%04x %s -> 0x%04x, %d bytes", code, params, rcode, len(payload))
+        with self._op_lock:   # one operation at a time: `serve` focuses from its request threads
+            t0 = time.time()
+            self.tid += 1
+            s = self._ctl
+            s.settimeout(timeout)
+            s.sendall(struct.pack("<IHHI", 12 + 4 * len(params), 1, code, self.tid)
+                      + b"".join(struct.pack("<I", p) for p in params))
+            if data is not None:
+                s.sendall(struct.pack("<IHHI", 12 + len(data), 2, code, self.tid) + data)
+            payload = b""
+            while True:
+                length, ctype, rcode, _ = struct.unpack("<IHHI", _recv(s, 12))
+                body = _recv(s, length - 12)
+                if ctype == 2:
+                    payload += body
+                elif ctype == 3:
+                    break
+                else:
+                    raise FujiError(f"unexpected container type {ctype} after operation 0x{code:04x}")
+        log.debug("operation 0x%04x %s -> 0x%04x, %d bytes, %.2f s", code, params, rcode, len(payload), time.time() - t0)
         if ok is not None and rcode not in ok:
             raise FujiError(f"operation 0x{code:04x} answered 0x{rcode:04x}", rcode)
         return rcode, payload
@@ -270,6 +275,26 @@ class Camera:
         log.warning("shutter accepted, but no CaptureComplete event within %.0f s", timeout)
         return False
 
+    def focus(self):
+        """Hold the half press: the camera runs autofocus at ITS OWN point and the lens moves (runs 38 to 40). The focus
+        stays after `release_focus()`. The point cannot be chosen: writing 0xD17C is ignored. CHANGES CAMERA STATE.
+
+        Call `release_focus()` afterwards (`close()` does it too). Public notes say an X-T3 over USB stops focusing while it is held.
+        Operation 0x9026 is a vendor operation with no public description; we send it with no parameters.
+        """
+        self.start_live()
+        with self._focus_lock:   # the preview page sends "down" and "up" from two threads, quick clicks raced (run 41)
+            if not self._locked:
+                self.op(0x9026)
+                self._locked = True
+
+    def release_focus(self):
+        """Let go of the half press (operation 0x9027). Does nothing if `focus()` was not called."""
+        with self._focus_lock:
+            if self._locked:
+                self._locked = False
+                self.op(0x9027)
+
     # --- reading pictures ----------------------------------------------------------------------------
 
     def _stop_live(self):
@@ -329,10 +354,11 @@ class Camera:
         return name, bytes(got)
 
     def close(self):
-        """End the session: TerminateOpenCapture if live view runs, then CloseSession."""
+        """End the session: release the focus lock, TerminateOpenCapture if live view runs, then CloseSession."""
         if self._ctl is None:
             return
         try:
+            self.release_focus()
             self._stop_live()
             if self._session:
                 self.op(0x1003, ok=None)

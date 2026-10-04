@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "src"))
 sys.path.insert(0, os.path.join(HERE, "fake_camera"))
 from fake_fuji_camera import FAKE_JPEG  # noqa: E402
 from fuji_xa import Camera, FujiError  # noqa: E402
-from fuji_xa.__main__ import main  # noqa: E402
+from fuji_xa.__main__ import main, serve  # noqa: E402
 
 
 def test_live_shoot_download():
@@ -77,14 +77,25 @@ def fetch(port, path, frames=0):
     return data
 
 
+def free_port():
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def post(port, path):
+    """POST with no body. Returns the status line."""
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
+        s.sendall(f"POST {path} HTTP/1.0\r\nContent-Length: 0\r\n\r\n".encode())
+        return s.recv(4096).split(b"\r\n")[0]
+
+
 def test_serve():
     fake = subprocess.Popen([sys.executable, os.path.join(HERE, "fake_camera", "fake_fuji_camera.py")],
                             stdout=subprocess.PIPE, text=True)
     try:
         assert "listening" in fake.stdout.readline()
-        with socket.socket() as probe:
-            probe.bind(("127.0.0.1", 0))
-            port = probe.getsockname()[1]
+        port = free_port()
         server = threading.Thread(target=main, args=(["--ip", "127.0.0.1", "serve", "--port", str(port), "--seconds", "4"],))
         server.start()
         stream = fetch(port, "/stream", frames=3)
@@ -97,7 +108,55 @@ def test_serve():
         fake.wait()
 
 
+def test_focus():
+    fake = subprocess.Popen([sys.executable, os.path.join(HERE, "fake_camera", "fake_fuji_camera.py")],
+                            stdout=subprocess.PIPE, text=True)
+    try:
+        assert "listening" in fake.stdout.readline()
+        with Camera("127.0.0.1") as cam:
+            cam.start_live()
+            assert cam.events()[0xD209] == 0
+            cam.focus()
+            assert cam.events()[0xD209] == 1     # the camera shows the lock in its change list (run 38)
+            cam.release_focus()
+            assert cam.events()[0xD209] == 0
+            cam.focus()                          # left held on purpose: close() must let go
+        with Camera("127.0.0.1") as cam:
+            cam.start_live()
+            assert cam.events()[0xD209] == 0
+            port = free_port()                   # the preview page's Focus button, as the browser sends it
+            server = threading.Thread(target=serve, args=(cam, "127.0.0.1", port, 4))
+            server.start()
+            fetch(port, "/")
+            assert b" 204 " in post(port, "/focus/down")
+            assert cam.events()[0xD209] == 1
+            assert b" 204 " in post(port, "/focus/up")
+            assert cam.events()[0xD209] == 0
+            assert b" 404 " in post(port, "/nothing")
+            started = threading.Event()          # a release that arrives while the lock is still being sent (run 42)
+            real_op = cam.op
+
+            def op(code, *args, **kwargs):
+                if code == 0x9026:
+                    started.set()
+                return real_op(code, *args, **kwargs)
+
+            cam.op = op
+            lock = threading.Thread(target=cam.focus)
+            lock.start()
+            assert started.wait(5)
+            cam.release_focus()                  # must wait for the lock to finish, then release it
+            lock.join(5)
+            assert cam.events()[0xD209] == 0
+            server.join(15)
+            assert not server.is_alive()
+    finally:
+        fake.kill()
+        fake.wait()
+
+
 if __name__ == "__main__":
     test_live_shoot_download()
     test_serve()
+    test_focus()
     print("ok")

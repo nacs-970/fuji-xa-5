@@ -23,7 +23,8 @@ the evidence layout.
   the SD card (owner confirmed twice). The camera screen is black during the session and stays black afterwards until the shutter button is pressed once (camera behaviour, see the [library finding](docs/findings/2026-10-05-library-first-real-run.md)). Download works too, and shoot plus download runs in one session (`--stage shoot --download-after`): `--stage download` fetched the picture (6 MB) in 1.2 s. See
   [remote-mode finding](docs/findings/2026-10-04-wifi-remote-mode-probe.md).
 - **Focus.** A shot released from the PC seems to focus at the centre of the frame. The camera's focus point can be
-  read (`fuji-xa props`, property `0xD17C`), and a write of it is accepted and ignored. To see where autofocus ran,
+  read (`fuji-xa props`, property `0xD17C`), and a write of it is accepted and ignored. The vendor operation `0x9026` starts the camera's autofocus from the PC (the lens moves,
+  `0xD209` goes to 1) and `0x9027` releases it, at the camera's own point, not one we write (runs 38 to 40). To see where autofocus ran,
   read the photo's metadata (see [Useful tools](#useful-tools)). See [protocol notes](docs/protocol/wifi.md) section 6.
 - The protocol is written down in [docs/protocol/wifi.md](docs/protocol/wifi.md) (clean-room, with a status on
   every fact).
@@ -41,7 +42,8 @@ does not need it. Seen on our own photos, details in [protocol notes](docs/proto
 
 - `exiftool -FocusPixel -AFMode photo.JPG`: where autofocus ran, as x and y in the 6000x4000 frame (centre `3000 2000`).
 - `exiftool -FocusWarning -BlurWarning -ExposureWarning photo.JPG`: the camera's own verdicts. Of 6 photos shot from the
-  PC, 5 read `Out of focus` (all at `3000 2000`) and 1 read `Good` (at `2983 1983`). Not checked against the pictures.
+  PC, 5 read `Out of focus` (all at `3000 2000`): their centre is a plain wall, where autofocus cannot lock. The 6th, a
+  textured subject, is sharp and reads `Good` (at `2983 1983`). Use a textured subject for any focus test.
 - `exiftool -ISO -ExposureTime -FNumber -FilmMode -WhiteBalance photo.JPG`: what the camera used. Use it to check the
   settings we decode from the change list (ISO was 200 to 1250 on Auto at 1/100).
 - Many photos at once: `exiftool -p '$FileName $FocusPixel $FocusWarning $ISO $ExposureTime' *.JPG`.
@@ -81,7 +83,7 @@ docs/
 scripts/                       probe tools written for the plans (own code); `with_camera_wifi.sh` runs one command per fresh Wi-Fi join
 captures/                      raw logs and pcap files, git-ignored (see captures/README.md)
 artifacts/                     APKs, firmware, decompiler output, git-ignored (see artifacts/README.md)
-src/fuji_xa/                   Python library and `fuji-xa` command (preview, serve, shoot, download, props, set). Fake-camera tested. All of them ran on the real camera, except that `set` was refused by the camera ([finding](docs/findings/2026-10-05-library-first-real-run.md))
+src/fuji_xa/                   Python library and `fuji-xa` command (preview, serve, shoot, download, props, set). Fake-camera tested. All of them ran on the real camera, except that `set` was refused by the camera. `Camera.focus()` and the Focus button on the `serve` page (click or hold Space = half press, autofocus at the camera's own point, focus shows in the preview in 1 to 2 s) ran on the real camera in runs 41 to 43 ([finding](docs/findings/2026-10-05-library-first-real-run.md))
 tests/                         fake camera test double (`tests/fake_camera/`) and `tests/test_fake_camera.py`; pcap replay comes with plan 07
 ```
 

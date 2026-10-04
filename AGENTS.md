@@ -92,8 +92,8 @@ Details and caveats: [wifi.md](docs/protocol/wifi.md) section 6.
 
 - Where autofocus ran: `exiftool -FocusPixel -AFMode photo.JPG`. x and y in the 6000x4000 frame, centre `3000 2000`.
 - The camera's own verdicts: `exiftool -FocusWarning -BlurWarning -ExposureWarning photo.JPG`. Of 6 photos shot from the
-  PC, 5 read `Out of focus` (all at `3000 2000`) and 1 read `Good` (at `2983 1983`). Not checked against the pictures,
-  so do not rely on it yet.
+  PC, 5 read `Out of focus` (all at `3000 2000`): their centre is a plain wall, where autofocus cannot lock. The 6th, a
+  textured subject, is sharp and reads `Good` (at `2983 1983`). Use a textured subject at the centre for any focus test.
 - What the camera used: `exiftool -ISO -ExposureTime -FNumber -FilmMode -WhiteBalance photo.JPG`. Compare it with the
   settings decoded from the change list (`0xD02A`, `0xD240`, `0x5007`, `0xD001`, `0x5005`). ISO was 200 to 1250 on Auto
   at 1/100, which may help decode the `0xD02A` top bit.

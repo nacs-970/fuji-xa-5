@@ -107,6 +107,7 @@ Poll it as a substitute for events on the control connection.
 | `0xD240` | shutter speed | `0x80030D40` for 1/200 (run 18), `0x8000EA60` for 1/60 (run 19) and `0x8007A120` for 1/500 (run 20, set by the owner). and `0x800186A0` for 1/100 (run 21, set by the owner). All fit: low part = denominator x 1000 (200000, 60000, 500000, 100000). In run 19 the owner had set 1/100 on the camera (dial on M) and the screen showed 1/60 after the session. Who changed it is not known. Four data points, fractions of a second only. The top bit was set in all three and is not understood. In run 20 the screen showed 1/500 before and after the session, so the session does not change the speed |
 | `0xD17C` | focus point position (libgphoto2 names it FocusMeteringMode) | 4 bytes `03 02 CC RR`: `CC` = column 1 to 13 (left to right), `RR` = row 1 to 7 (top to bottom), a 13 x 7 grid of 91 points. Single point: top-left `0x03020101`, top-right `0x03020D01`, bottom-right `0x03020D07`, centre with DISP/BACK `0x03020704` (runs 31 to 34). A hand-set "centre" and ZONE read `0x03020804`. The high bytes `03 02` never changed, meaning not known. A write of the 4 bytes was accepted (`0x2001`) and the change list followed it (runs 35 to 37), but the focus frame stayed at the centre and the photo's `FocusPixel` metadata (2983, 1983) shows autofocus ran at the centre: the write is ignored |
 | `0x500A` | focus mode (name from standard PTP) | `0x8001` with the owner's camera set to AF-S (run 18) and to AF-C (run 19). It does not tell them apart |
+| `0xD209` | AF status (libgphoto2 name) | 0 at rest. 1 after vendor op `0x9026`, back to 0 after `0x9027` (run 38). libgphoto2 reads 1 as busy, 2 ok, 3 failed over USB: not checked here, we read it once after 3 s and saw 1 |
 | `0x500C` | flash mode | 2 while the built-in flash was closed (it must be popped up by hand on this camera). In standard PTP 2 is flash off |
 | `0x500E` | exposure mode | 1 with the mode dial on M in runs 18 and 19 (the owner first said auto, then corrected it). In standard PTP 1 is manual, which fits. One value only |
 | `0x5010` | exposure bias (name from standard PTP) | 0. The owner did not give the camera's setting |
@@ -158,7 +159,9 @@ With open capture running, send **one** `InitiateCapture` (`0x100E`, parameters 
 at once (observed, three runs). No focus step is needed. The camera runs its own autofocus on this command, with
 the focus mode and focus point set on the camera. With the point on the centre and the wall 60 cm away, the wall was
 sharp and a toy 15 cm from the lens was soft (too close to focus). The owner heard the lens move before the shutter
-sound (run 13). Focus control from the PC is not known, but the focus point position can be read (`0xD17C`, section 4).
+sound (run 13). The focus point position can be read (`0xD17C`, section 4) and a write of it is ignored.
+
+**Starting autofocus from the PC (runs 38 to 40, observed).** Vendor operation `0x9026` (libgphoto2: SetFocusPoint, `libfuji`: LockS1Lock) with no parameters and no data, sent in remote mode, answered `0x2001`. `0xD209` went from 0 to 1 and the owner heard the lens move. Vendor operation `0x9027` (UnlockS1Lock) with no parameters answered `0x2001` and `0xD209` went back to 0. No photo was taken. Not known: which focus point the lock uses, what parameters do, whether it is a half press, and how long the camera stays locked. Run 39: `0xD209` stayed 1 for the whole lock (about 5 s) and never reached 2 or 3, so it looks like "locked" here. A shutter command sent while locked answered `0x2001` and the photo's `FocusPixel` was the centre (2983, 1983), although `0xD17C` had been written to top-left first: the lock without parameters does not use the written point. Run 40 (live view only, no photo) showed the same: the lens focused on the object near the centre, not at the written top-left corner, and kept that focus after `0x9027`.
 
 **Checking where autofocus ran.** Every photo carries it in its Fuji MakerNote: `exiftool -FocusPixel -AFMode photo.JPG`
 (tag `0x1023`, two numbers: x and y in pixels of the 6000x4000 picture, centre `3000 2000`). If the autofocus grid spans
@@ -166,8 +169,12 @@ the whole frame (not checked), a cell (column 1 to 13, row 1 to 7) is near x = (
 y = (row - 0.5) / 7 x 4000. Photos released from the PC read (3000, 2000) or a few pixels off it, whatever point the
 camera showed or we wrote (runs 23, 24, 36 and 37). That is one tag from a few photos. Not checked: a photo taken with
 the camera's own shutter button at another point. The tag `FocusWarning` read `Out of focus` on 5 of the 6 photos we shot
-from the PC (all at `3000 2000`) and `Good` on the sixth, the one at (2983, 1983). Two readings fit: those shots were soft,
-or an exact `3000 2000` means autofocus did not lock. Not checked against the pictures.
+from the PC (all at `3000 2000`) and `Good` on the sixth, the one at (2983, 1983). Checked against the pictures at
+100% (2026-10-05): the centre of all five `Out of focus` photos is a plain wall with no detail, where autofocus cannot
+lock, so that verdict is expected. The sixth has a textured subject at the centre, is sharp there and reads `Good`. So
+`FocusWarning` fits what the pictures show (six photos), and a plain wall tells nothing about where autofocus ran: use a
+textured subject at the centre for any focus test. Possible, not tested: an exact `3000 2000` means autofocus found
+nothing to lock on (the two `Good` photos, runs 37 and 39, both read (2983, 1983)).
 
 After the command the camera sends events on TCP 55741. Each event is a 28-byte container: length 28,
 type 4, code, transaction id (1), four u32 parameters, the fourth always 0 (observed). Read the container by
@@ -251,7 +258,7 @@ Speed: about 5 MB/s. A 6 to 7 MB full-size JPEG took 1.2 to 1.4 s.
 
 ## 9. What is not known or not done
 
-- How to set the focus point or start autofocus from the PC (the point can be read, `0xD17C`), manual focus, and whether the lens already moves in live view. DeviceInfo does not list `0x9026` and `0x9027`, but it does not list the working `0x100E` either (run 29).
+- How to choose the focus point from the PC (the point can be read, `0xD17C`, and a write of it is ignored; whether `0x9026` uses it is not tried), manual focus, and whether the lens already moves in live view. Autofocus can be started with `0x9026` (run 38). DeviceInfo does not list `0x9026` and `0x9027`, but it does not list the working `0x100E` either (run 29).
 - What the `0xC001` event parameter is, and what `0xD222` counts.
 - Why one init with the accepted prefix was rejected once.
 - The allowed values of the camera settings, and how to set them (ISO, aperture, shutter speed, white balance, film simulation, exposure compensation). Movies, thumbnails.

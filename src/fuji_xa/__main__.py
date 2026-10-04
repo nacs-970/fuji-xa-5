@@ -12,16 +12,38 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import Camera, FujiError
 
-PAGE = (b'<!doctype html><meta charset="utf-8"><title>fuji-xa</title>'
-        b'<body style="margin:0;background:#000"><img src="/stream" style="width:100%">')
+PAGE = b"""<!doctype html><meta charset="utf-8"><title>fuji-xa</title>
+<body style="margin:0;background:#000;color:#fff;font:16px sans-serif">
+<img src="/stream" style="width:100%">
+<p style="margin:8px">Hold <b>Space</b> or the button to focus. The lens focuses while you hold, and keeps it when you let go.
+<button id=f style="font-size:20px;padding:8px 24px">Focus</button></p>
+<script>
+const f = document.getElementById("f");
+let down = false, chain = Promise.resolve();   // "up" is sent only after "down" was answered
+const press = d => { if (d !== down) { down = d; chain = chain.then(() => fetch("/focus/" + (d ? "down" : "up"), {method: "POST"})).catch(() => {}); } };
+f.onpointerdown = () => press(true);
+for (const e of ["pointerup", "pointerleave", "pointercancel"]) f.addEventListener(e, () => press(false));
+addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault(); press(true); } });
+addEventListener("keyup", e => { if (e.code === "Space") press(false); });
+addEventListener("blur", () => press(false));
+</script>"""
 
 
 def serve(cam, host, port, seconds=None):
     """Live view as an MJPEG stream: open http://HOST:PORT/ in a browser. Runs until Ctrl-C or `seconds`.
 
-    ponytail: no login, and several viewers share the frames (each sees a part). Keep HOST on 127.0.0.1.
+    The page has a Focus button (and the Space key): hold = half press, the camera focuses at its own point (Camera.focus).
+
+    ponytail: no login, and several viewers share the frames (each sees a part). Any local web page can press Focus. Keep
+    HOST on 127.0.0.1.
     """
-    stop, failed = threading.Event(), []
+    stop, failed, hold = threading.Event(), [], []
+
+    def let_go():
+        for timer in hold:
+            timer.cancel()
+        hold.clear()
+        cam.release_focus()
 
     def finish():
         stop.set()
@@ -49,6 +71,23 @@ def serve(cam, host, port, seconds=None):
                 if not stop.is_set():
                     failed.append(exc)
                     threading.Thread(target=finish).start()
+
+        def do_POST(self):
+            try:
+                if self.path == "/focus/down":
+                    cam.focus()
+                    timer = threading.Timer(10, let_go)   # the browser never said "up" (tab closed, key held)
+                    timer.daemon = True
+                    timer.start()
+                    hold.append(timer)
+                elif self.path == "/focus/up":
+                    let_go()
+                else:
+                    return self.send_error(404)
+            except (FujiError, OSError) as exc:
+                return self.send_error(500, str(exc).splitlines()[0])
+            self.send_response(204)
+            self.end_headers()
 
         def log_message(self, *args):
             pass
