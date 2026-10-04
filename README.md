@@ -23,9 +23,8 @@ the evidence layout.
   the SD card (owner confirmed twice). The camera screen is black during the session and stays black afterwards until the shutter button is pressed once (camera behaviour, see the [library finding](docs/findings/2026-10-05-library-first-real-run.md)). Download works too, and shoot plus download runs in one session (`--stage shoot --download-after`): `--stage download` fetched the picture (6 MB) in 1.2 s. See
   [remote-mode finding](docs/findings/2026-10-04-wifi-remote-mode-probe.md).
 - **Focus.** A shot released from the PC seems to focus at the centre of the frame. The camera's focus point can be
-  read (`fuji-xa props`, property `0xD17C`), and a write of it is accepted and ignored. To see where autofocus ran for
-  any photo, read its metadata: `exiftool -FocusPixel -AFMode photo.JPG` (the centre of the 6000x4000 frame is
-  `3000 2000`). See [protocol notes](docs/protocol/wifi.md) section 6.
+  read (`fuji-xa props`, property `0xD17C`), and a write of it is accepted and ignored. To see where autofocus ran,
+  read the photo's metadata (see [Useful tools](#useful-tools)). See [protocol notes](docs/protocol/wifi.md) section 6.
 - The protocol is written down in [docs/protocol/wifi.md](docs/protocol/wifi.md) (clean-room, with a status on
   every fact).
 - The goal is **not new**: [libfuji](https://github.com/petabyt/libfuji) (MIT, C, active) and its Android app
@@ -33,6 +32,20 @@ the evidence layout.
   found names the X-A5. See [prior art survey](docs/findings/2026-10-04-prior-art-survey.md).
 - The REA/Ghidra native analysis has **not run**: Ghidra and a supported JDK are not installed.
   See [feasibility assessment](docs/findings/2026-10-04-feasibility-assessment.md).
+
+## Useful tools
+
+Every photo the camera saves records what the camera did, and `exiftool` reads it (no special scene needed). It is a
+separate install (Arch: `perl-image-exiftool`, Debian and Ubuntu: `libimage-exiftool-perl`), and the `fuji-xa` library
+does not need it. Seen on our own photos, details in [protocol notes](docs/protocol/wifi.md) section 6:
+
+- `exiftool -FocusPixel -AFMode photo.JPG`: where autofocus ran, as x and y in the 6000x4000 frame (centre `3000 2000`).
+- `exiftool -FocusWarning -BlurWarning -ExposureWarning photo.JPG`: the camera's own verdicts. Of 6 photos shot from the
+  PC, 5 read `Out of focus` (all at `3000 2000`) and 1 read `Good` (at `2983 1983`). Not checked against the pictures.
+- `exiftool -ISO -ExposureTime -FNumber -FilmMode -WhiteBalance photo.JPG`: what the camera used. Use it to check the
+  settings we decode from the change list (ISO was 200 to 1250 on Auto at 1/100).
+- Many photos at once: `exiftool -p '$FileName $FocusPixel $FocusWarning $ISO $ExposureTime' *.JPG`.
+- A full dump prints serial number tags. Name the tags you want, and never commit or paste the serial.
 
 ## Plans
 

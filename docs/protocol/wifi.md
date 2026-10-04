@@ -165,7 +165,9 @@ sound (run 13). Focus control from the PC is not known, but the focus point posi
 the whole frame (not checked), a cell (column 1 to 13, row 1 to 7) is near x = (column - 0.5) / 13 x 6000 and
 y = (row - 0.5) / 7 x 4000. Photos released from the PC read (3000, 2000) or a few pixels off it, whatever point the
 camera showed or we wrote (runs 23, 24, 36 and 37). That is one tag from a few photos. Not checked: a photo taken with
-the camera's own shutter button at another point.
+the camera's own shutter button at another point. The tag `FocusWarning` read `Out of focus` on 5 of the 6 photos we shot
+from the PC (all at `3000 2000`) and `Good` on the sixth, the one at (2983, 1983). Two readings fit: those shots were soft,
+or an exact `3000 2000` means autofocus did not lock. Not checked against the pictures.
 
 After the command the camera sends events on TCP 55741. Each event is a 28-byte container: length 28,
 type 4, code, transaction id (1), four u32 parameters, the fourth always 0 (observed). Read the container by

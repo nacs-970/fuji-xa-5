@@ -74,8 +74,6 @@ pyproject.toml                 package metadata, no license field until the owne
   2.5.34 binary or from `master`. Say "not tested" when it is not tested.
 - Clean-room: write protocol behavior in your own words. Public notes (libfuji, fuji-cam-wifi-tool,
   libgphoto2) are references, not code to paste. See [docs/legal-and-clean-room.md](docs/legal-and-clean-room.md).
-- To see where autofocus ran for a photo, read its metadata: `exiftool -FocusPixel -AFMode photo.JPG` (6000x4000 frame,
-  centre `3000 2000`; `exiftool` is installed). Details and the caveat: [wifi.md](docs/protocol/wifi.md) section 6.
 - Test new probe code against the fake camera first: run `tests/fake_camera/fake_fuji_camera.py` and pass
   `--ip 127.0.0.1`. The fake camera is built from public notes, not from a recording. Passing it does not prove
   the real camera works.
@@ -83,6 +81,26 @@ pyproject.toml                 package metadata, no license field until the owne
   the evidence is mixed. `--dry-run` on the hello probe never writes logs.
 - Scripts log to `captures/wifi-gphoto2/<date>-<name>.txt`. Do not print the camera serial number.
 - Disk is tight (`/` was about 94% full). Keep large files under `/media/d` and save images under `/tmp`.
+
+## Useful tools
+
+A photo from the camera records what the camera did, so read it with `exiftool` after a shot instead of judging the
+picture by eye. `exiftool` is not part of this repo and not every machine has it: run `command -v exiftool` first. If it
+prints nothing, tell the user and ask them to install it (Arch: `perl-image-exiftool`, Debian and Ubuntu:
+`libimage-exiftool-perl`). Do not install it yourself. On the owner's machine it is `/usr/bin/vendor_perl/exiftool`.
+Details and caveats: [wifi.md](docs/protocol/wifi.md) section 6.
+
+- Where autofocus ran: `exiftool -FocusPixel -AFMode photo.JPG`. x and y in the 6000x4000 frame, centre `3000 2000`.
+- The camera's own verdicts: `exiftool -FocusWarning -BlurWarning -ExposureWarning photo.JPG`. Of 6 photos shot from the
+  PC, 5 read `Out of focus` (all at `3000 2000`) and 1 read `Good` (at `2983 1983`). Not checked against the pictures,
+  so do not rely on it yet.
+- What the camera used: `exiftool -ISO -ExposureTime -FNumber -FilmMode -WhiteBalance photo.JPG`. Compare it with the
+  settings decoded from the change list (`0xD02A`, `0xD240`, `0x5007`, `0xD001`, `0x5005`). ISO was 200 to 1250 on Auto
+  at 1/100, which may help decode the `0xD02A` top bit.
+- Many photos at once: `exiftool -p '$FileName $FocusPixel $FocusWarning $ISO $ExposureTime' *.JPG`.
+- Never print the serial number. A full dump (`-FujiFilm:all`, `-a -G1 -s`) includes serial tags: name the tags you want.
+- Idea, not tested: `GetPartialObject` (`0x101B`) may fetch only the start of a picture, enough for these tags, instead
+  of a 6 MB download.
 
 ## Environment notes
 
