@@ -1,6 +1,6 @@
 # Plan 05: APK static analysis with jadx
 
-Status: not started. Risk: none for the camera. Needs installs: yes, see GATE.
+Status: done 2026-10-05 (APK from the owner's phone, jadx 1.5.6). Result: [finding](../findings/2026-10-05-apk-analysis.md). The protocol is in native libraries, so plan 06 is still the way to read the bytes. Risk: none for the camera. Needs installs: yes, see GATE.
 
 ## Question
 

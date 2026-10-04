@@ -19,7 +19,7 @@ GUID_PREFIX = bytes.fromhex("ada5485d87b27f0bd3d5ded0")  # the camera checks the
 HOST = "127.0.0.1"
 FAKE_JPEG = b"\xff\xd8\xff\xe0" + bytes(range(256)) * 4500 + b"\xff\xd9"   # about 1.1 MB, two chunks
 state = {"client_state": 2, "remote_ver": 0x20006, "capture_open": False, "objects": 3, "view": False,
-         "events": None, "servers": False, "busy_until": 0, "fnumber": 0xAA, "locked": False}
+         "events": None, "servers": False, "busy_until": 0, "fnumber": 0xAA, "locked": False, "point": 0x03020704}
 
 
 def listen(port):
@@ -122,7 +122,7 @@ def handle(c):
         elif code == 0x1015:
             prop = params[0]
             if prop == 0xD212:
-                evs = [(0xDF00, 6 if state["client_state"] in (5, 11) else 2), (0x5007, state["fnumber"]), (0xD17C, 0x03020704), (0xD209, int(state["locked"]))]
+                evs = [(0xDF00, 6 if state["client_state"] in (5, 11) else 2), (0x5007, state["fnumber"]), (0xD17C, state["point"]), (0xD209, int(state["locked"]))]
                 if state["view"]:
                     evs.append((0xD222, state["objects"]))
                 payload = struct.pack("<H", len(evs)) + b"".join(struct.pack("<HI", a, b) for a, b in evs)
@@ -148,6 +148,8 @@ def handle(c):
             if code == 0x9026:
                 time.sleep(0.3)   # the X-A5 took about 0.9 s to answer the lock (run 41, from log timestamps)
             state["locked"] = code == 0x9026
+            if code == 0x9026:   # with a cell the point follows it and stays; without one it goes to the centre (run 46)
+                state["point"] = params[0] if params else 0x03020704
             c.sendall(container(3, 0x2001, tid))
         else:
             c.sendall(container(3, 0x2005, tid))

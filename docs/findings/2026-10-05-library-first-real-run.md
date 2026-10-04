@@ -52,8 +52,10 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 42 | The same with `--seconds 30` and timestamps on the log lines. The owner said "retry again 30s this time" and "ready" | `xa5-probe` | All operations answered `0x2001`. The pairs were not balanced: four `0x9026` with only two `0x9027` between 25.96 s and 32.40 s of the log, while the owner clicked the page button. Later presses came as clean pairs. The session ended normally. See "Focus from the preview page" |
 | 43 | `fuji-xa -v serve --seconds 30` again, after the race fix, with the duration of each operation in the log. The owner said "ready" | `xa5-probe` | 13 locks and 13 releases, strictly alternating, all `0x2001`. The session ended normally. `0x9026` took 0.00 to 0.04 s (0.41 s once), `0x9027` 0.00 to 2.51 s. The owner: clicks on the page button focused the lens, Space holds of about 2 s focused it, and the focus showed in the preview within 1 to 2 s. See "Focus from the preview page" |
 | 44 | Scratch script `button_watch.py`, read-only: live view with the PC preview (its Focus button switched off), the property list read about 10 times a second and the event port listened to for 75 s, printing only changes. The owner pressed the shutter (half-press), Q, DISP/BACK and Menu. The owner said "ready for button" | `xa5-probe` | **No property changed and no event arrived** in 75 s (22 properties in the list). None of the camera's buttons did anything for the session, as the owner saw it; a half-press of the shutter woke the black screen. The owner also tried Space and the page's Focus button: they were refused (HTTP 500) as designed. The session ended normally. See "Camera buttons" |
+| 45 | Scratch script `focus_cell.py`: live view with the PC preview, vendor operation `0x9026` with the parameter `0x03020303` (column 3, row 3) held 4 s, `0x9027`, the live-view frame headers recorded, then the read-only vendor operation `0x902B` with no parameters. No photo. The owner said "ready, yes vendor" | `xa5-probe` | `0x9026` with the parameter answered `0x2001`, `0xD209` went 0 to 1 within 0.3 s and back to 0 after `0x9027`, as with no parameter. **The frames did not sharpen**: the edge strength of every 80 px cell changed by 1 or less between the frame before the lock and the one at its end. The owner answered "yes, yes" to my questions whether the lens moved and whether the preview sharpened (I read it that way; the question about an object in the cell was not answered separately), so the two frames I sampled may have missed it. The frame header: bytes 4 and 5 after the length are a 16-bit frame counter, the other 12 bytes were 0 in all 1151 frames, so the header carries no autofocus information. **`0x902B` answered `0x2001` with 360 bytes: 10 property descriptions**, with ranges and allowed values (see "Property descriptions"). The session ended normally |
+| 46 | `fuji-xa -v serve --seconds 90` with the new page: a green square for the camera's focus point, click on the picture to focus there, Space and a Focus button. About 50 clicks and a few presses of Space. The owner said "ready, yes vendor" | `xa5-probe` | Every `0x9026` (with a cell, or none for Space) and `0x9027` answered `0x2001`; the lock answered in 0.00 to 0.43 s, the release in up to 1.09 s. The session ended normally. The owner: the square appeared and jumped to the clicked cell; **the lens focused at the clicked point**; the square stayed on the cell after the release; Space and the Focus button, which sent no cell, **moved the point to the centre** and focused there; the preview stuttered for the first few seconds. **Choosing the focus point from the PC works.** See "Choosing the focus point" |
 
-Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 to 35. Runs 36 and 37 took one each. Run 38 took none, run 39 one and runs 40 to 44 none.
+Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 to 35. Runs 36 and 37 took one each. Run 38 took none, run 39 one and runs 40 to 46 none.
 
 ## What run 3 showed
 
@@ -339,6 +341,60 @@ preview page were refused on purpose in this run.
   was taken). Those two were not part of the script's 75 s record, so only the camera's own behaviour is known there,
   not whether it reported them to the PC.
 - Not tested: the touch screen, and pressing for longer.
+
+## Property descriptions (run 45)
+
+Vendor operation `0x902B`, which the official app uses (APK finding), answered `0x2001` with no parameters and no
+trouble. The reply is a 32-bit count (10), then per property a 32-bit size that includes its own four bytes and a standard
+PTP property description: code, data type, read-only or get/set flag, default, current value, form flag, and a range or a
+list of allowed values. The layout matched what public libgphoto2 code reads, except for the size rule. The properties:
+
+| Property | Flag | Current | Allowed |
+|----------|------|---------|---------|
+| `0xD019` | read-only | 1 | 0, 1 |
+| `0x500C` (flash mode) | get/set | 2 | 2 only |
+| `0x5012` | get/set | 0 | 0, 2, 4 |
+| `0xD17C` (the app's S1 lock) | get/set | `0x03020303` (the cell we sent, see below) | range 0 to `0x10090D07`, step 1 |
+| `0xD245` (AF select mode) | get/set | 2 | 0, 1, 2, 3 |
+| `0xD240` (shutter speed) | get/set | `0x800186A0` (1/100) | one value, `0x7530` |
+| `0x5005` (white balance) | get/set | 2 | 2, 4, 6, `0x8001`, `0x8002`, `0x8003`, `0x8006`, `0x800A`, `0x800B`, `0x800C` |
+| `0x5007` (F-number) | get/set | `0xAA` (f/1.7) | `0xFFFF`, `0xDC`, `0x118` |
+| `0xD001` (film simulation) | get/set | 1 | 1 to 5, `0xB`, 6 to `0xA` |
+| `0xD02A` (ISO) | get/set | `0x80000C80` | 27 values, see below |
+
+- `0xD17C`: the maximum `0x10090D07` is the same layout as the value. Low two bytes `0x0D07` are the grid, **13 columns by
+  7 rows**, as the app reads it. High two bytes `0x1009` are 16 and 9, so the maximum aspect is 16:9 and the current one
+  (`03 02`) is 3:2. The grid is read from the camera, so it is not hard-coded in the app.
+- **ISO values** (`0xD02A`): a plain number is the ISO itself (`0xC8` = 200 up to `0x3200` = 12800, in the usual
+  thirds: 200, 250, 320, 400, 500, 640, 800, 1000, 1250, 1600, 2000, 2500, 3200, 4000, 5000, 6400, 8000, 10000, 12800),
+  `0x40000064`, `0x40006400` and `0x4000C800` are the extended values (100, 25600, 51200), and `0x80000000` plus a number is
+  Auto up to that ISO (`0x80000190`, `320`, `640`, `C80`, `1900` are Auto up to 400, 800, 1600, 3200, 6400). So the
+  `0x80000C80` we read in run 19 is Auto up to 3200, which is what the camera was set to ("Auto3").
+- The get/set flag is not a promise. `0x5007` and `0xD240` are marked get/set and our writes were refused (runs 21 and
+  22). The list for `0x5007` (three values) and `0xD240` (one) is also shorter than what the camera can do, and the current
+  F-number (`0xAA`) is not in it, so these two lists describe something other than the lens' real range. Not understood.
+- `0xD17C` read `0x03020303` after the lock, the cell we sent. That is not proof that autofocus used it: in runs 35 to 37
+  the camera also read back what we wrote and ignored it.
+
+## Choosing the focus point (runs 45 and 46)
+
+**It works.** Vendor operation `0x9026` with one 32-bit parameter focuses the X-A5 at the chosen cell. The parameter is
+the picture aspect (two bytes, `03 02` for 3:2), then the column (1 to 13) and the row (1 to 7), the same layout as `0xD17C`,
+as the official app does for a tap (APK finding). `0x9027` with no parameter releases it.
+- The owner saw the lens focus at the clicked point, and the camera's `0xD17C` followed the cell (`0x902B` read it back in
+  run 45, the page showed it as a square in run 46).
+- **The point stays after the release.** The release does not reset it.
+- **A lock without a cell moves the point to the centre** and focuses there (runs 38 to 43 did exactly that, which is why
+  they always focused at the centre). A write of `0xD17C` still does nothing (runs 35 to 37).
+- Run 45's script frames did not show a clear sharpening: two frames per phase, the camera was moved by hand, and the cell
+  lay on a blurred dark edge. The owner reported the lens moving and the preview sharpening. Run 46, where the owner clicked
+  on objects and watched, is the clear result.
+- After run 46 the page's Focus button and Space were changed to lock at the square's cell, because a lock without a cell
+  sends the point back to the centre. That change was tested on the fake camera only.
+- `Camera.focus((column, row))` and the page's click-to-focus are the library side of this. The grid, 13 by 7, is a constant
+  taken from the camera's `0xD17C` range maximum (run 45); another body may differ.
+- The preview stuttered for the first few seconds of run 46. Earlier runs also showed dips (24 to 27 fps, and 16.6 fps on
+  the first client). The page now also reads the camera's property list twice a second, which might add to it. Not measured.
 
 Public sources read after run 39 (2026-10-05, listed in `docs/references.md`, nothing copied): none says what `0x9026` takes.
 The Go package `mikefsq/ptp/fuji` only names it. On USB (X-T3, X-T5) autofocus is a half press: `0xD208` = `0x9300` then

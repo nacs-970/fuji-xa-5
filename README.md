@@ -24,7 +24,7 @@ the evidence layout.
   [remote-mode finding](docs/findings/2026-10-04-wifi-remote-mode-probe.md).
 - **Focus.** A shot released from the PC seems to focus at the centre of the frame. The camera's focus point can be
   read (`fuji-xa props`, property `0xD17C`), and a write of it is accepted and ignored. The vendor operation `0x9026` starts the camera's autofocus from the PC (the lens moves,
-  `0xD209` goes to 1) and `0x9027` releases it, at the camera's own point, not one we write (runs 38 to 40). To see where autofocus ran,
+  `0xD209` goes to 1) and `0x9027` releases it, at the camera's own point, not one we write (runs 38 to 40). The official app's code (read from its APK, [finding](docs/findings/2026-10-05-apk-analysis.md)) showed that touch focus is `0x9026` with one number: picture aspect, column, row, the same layout as `0xD17C`. We tried it and the lens focuses at the chosen cell (runs 45 and 46). To see where autofocus ran,
   read the photo's metadata (see [Useful tools](#useful-tools)). See [protocol notes](docs/protocol/wifi.md) section 6.
 - The protocol is written down in [docs/protocol/wifi.md](docs/protocol/wifi.md) (clean-room, with a status on
   every fact).
@@ -83,7 +83,7 @@ docs/
 scripts/                       probe tools written for the plans (own code); `with_camera_wifi.sh` runs one command per fresh Wi-Fi join
 captures/                      raw logs and pcap files, git-ignored (see captures/README.md)
 artifacts/                     APKs, firmware, decompiler output, git-ignored (see artifacts/README.md)
-src/fuji_xa/                   Python library and `fuji-xa` command (preview, serve, shoot, download, props, set). Fake-camera tested. All of them ran on the real camera, except that `set` was refused by the camera. `Camera.focus()` and the Focus button on the `serve` page (click or hold Space = half press, autofocus at the camera's own point, focus shows in the preview in 1 to 2 s) ran on the real camera in runs 41 to 43 ([finding](docs/findings/2026-10-05-library-first-real-run.md))
+src/fuji_xa/                   Python library and `fuji-xa` command (preview, serve, shoot, download, props, set). Fake-camera tested. All of them ran on the real camera, except that `set` was refused by the camera. `Camera.focus()` and the Focus button on the `serve` page (click or hold Space = half press, autofocus at the camera's own point, focus shows in the preview in 1 to 2 s) ran on the real camera in runs 41 to 43. The page also draws the camera's focus point as a green square and lets you click the picture to focus at that cell (`Camera.focus((column, row))`): this worked on the real camera (run 46) ([finding](docs/findings/2026-10-05-library-first-real-run.md))
 tests/                         fake camera test double (`tests/fake_camera/`) and `tests/test_fake_camera.py`; pcap replay comes with plan 07
 ```
 

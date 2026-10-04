@@ -3,36 +3,65 @@
 Open WIRELESS COMMUNICATION on the camera and join its Wi-Fi first. One command is one session.
 """
 import argparse
+import json
 import logging
 import os
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
-from . import Camera, FujiError
+from . import GRID, P_FOCUS_POINT, Camera, FujiError
 
 PAGE = b"""<!doctype html><meta charset="utf-8"><title>fuji-xa</title>
 <body style="margin:0;background:#000;color:#fff;font:16px sans-serif">
-<img src="/stream" style="width:100%">
-<p style="margin:8px">Hold <b>Space</b> or the button to focus. The lens focuses while you hold, and keeps it when you let go.
+<div id=wrap style="position:relative"><img id=img src="/stream" draggable=false style="width:100%;display:block">
+<div id=pt style="position:absolute;border:2px solid #0f0;box-sizing:border-box;pointer-events:none;display:none"></div></div>
+<p style="margin:8px">Click the picture to focus there, or hold <b>Space</b> or the button to focus at the green square. The lens focuses while you hold, and keeps it when you let go.
 <button id=f style="font-size:20px;padding:8px 24px">Focus</button></p>
 <script>
-const f = document.getElementById("f");
-let down = false, chain = Promise.resolve();   // "up" is sent only after "down" was answered
-const press = d => { if (d !== down) { down = d; chain = chain.then(() => fetch("/focus/" + (d ? "down" : "up"), {method: "POST"})).catch(() => {}); } };
+let down = false, chain = Promise.resolve(), area = null;   // "up" is sent only after "down" was answered
+const press = (d, q) => { if (d !== down) { down = d; chain = chain.then(() => fetch("/focus/" + (d ? "down" : "up") + (q || ""), {method: "POST"})).catch(() => {}); } };
+const f = document.getElementById("f"), img = document.getElementById("img"), pt = document.getElementById("pt");
 f.onpointerdown = () => press(true);
 for (const e of ["pointerup", "pointerleave", "pointercancel"]) f.addEventListener(e, () => press(false));
 addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault(); press(true); } });
 addEventListener("keyup", e => { if (e.code === "Space") press(false); });
 addEventListener("blur", () => press(false));
+// the autofocus grid lies over the picture (aspect aw:ah), which sits in the middle of the 4:3 live-view frame
+function layout(s) {
+  const W = img.clientWidth, H = W * 3 / 4, wide = s.aw / s.ah >= 4 / 3;
+  const w = wide ? W : H * s.aw / s.ah, h = wide ? W * s.ah / s.aw : H;
+  return {x: (W - w) / 2, y: (H - h) / 2, w, h, cols: s.cols, rows: s.rows};
+}
+async function refresh() {
+  try {
+    const s = await (await fetch("/state")).json();
+    if (!s.col) return;
+    area = layout(s);
+    pt.style.display = "block";
+    pt.style.left = area.x + (s.col - 1) * area.w / s.cols + "px"; pt.style.top = area.y + (s.row - 1) * area.h / s.rows + "px";
+    pt.style.width = area.w / s.cols + "px"; pt.style.height = area.h / s.rows + "px";
+  } catch (e) {}
+}
+setInterval(refresh, 500); refresh();
+img.onpointerdown = e => {
+  if (!area) return;
+  const r = img.getBoundingClientRect(), x = e.clientX - r.left - area.x, y = e.clientY - r.top - area.y;
+  if (x < 0 || y < 0 || x >= area.w || y >= area.h) return;
+  press(true, "?cell=" + (Math.floor(x / area.w * area.cols) + 1) + "," + (Math.floor(y / area.h * area.rows) + 1));
+};
+img.onpointerup = img.onpointerleave = img.onpointercancel = () => press(false);
 </script>"""
 
 
 def serve(cam, host, port, seconds=None):
     """Live view as an MJPEG stream: open http://HOST:PORT/ in a browser. Runs until Ctrl-C or `seconds`.
 
-    The page has a Focus button (and the Space key): hold = half press, the camera focuses at its own point (Camera.focus).
+    The page shows the camera's focus point (a green square from property 0xD17C, read twice a second). Click the picture
+    to focus there (Camera.focus with a cell, worked on the X-A5, run 46), or hold the Focus button or Space to focus at the
+    square again (a lock without a cell would move the point to the centre).
 
     ponytail: no login, and several viewers share the frames (each sees a part). Any local web page can press Focus. Keep
     HOST on 127.0.0.1.
@@ -49,8 +78,26 @@ def serve(cam, host, port, seconds=None):
         stop.set()
         srv.shutdown()
 
+    def poll():   # keep the focus point fresh for the page
+        while not stop.wait(0.5):
+            try:
+                cam.events()
+            except (FujiError, OSError):
+                return
+
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
+            if self.path == "/state":
+                point = cam.props.get(P_FOCUS_POINT)
+                state = {} if point is None else {"aw": point >> 24, "ah": point >> 16 & 255, "col": point >> 8 & 255,
+                                                   "row": point & 255, "cols": GRID[0], "rows": GRID[1]}
+                body = json.dumps(state).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             self.send_response(200)
             if self.path != "/stream":
                 self.send_header("Content-Type", "text/html")
@@ -74,17 +121,24 @@ def serve(cam, host, port, seconds=None):
 
         def do_POST(self):
             try:
-                if self.path == "/focus/down":
-                    cam.focus()
+                url = urlparse(self.path)
+                if url.path == "/focus/down":
+                    cell = parse_qs(url.query).get("cell")
+                    point = cam.props.get(P_FOCUS_POINT)
+                    if cell:
+                        cell = tuple(int(n) for n in cell[0].split(","))
+                    elif point:   # no click: focus at the square, not at the centre
+                        cell = (point >> 8 & 255, point & 255)
+                    cam.focus(cell or None)
                     timer = threading.Timer(10, let_go)   # the browser never said "up" (tab closed, key held)
                     timer.daemon = True
                     timer.start()
                     hold.append(timer)
-                elif self.path == "/focus/up":
+                elif url.path == "/focus/up":
                     let_go()
                 else:
                     return self.send_error(404)
-            except (FujiError, OSError) as exc:
+            except (FujiError, OSError, ValueError) as exc:
                 return self.send_error(500, str(exc).splitlines()[0])
             self.send_response(204)
             self.end_headers()
@@ -93,6 +147,7 @@ def serve(cam, host, port, seconds=None):
             pass
 
     srv = ThreadingHTTPServer((host, port), Handler)
+    threading.Thread(target=poll, daemon=True).start()
     print(f"live view: http://{host}:{srv.server_address[1]}/  (Ctrl-C to stop)", flush=True)
     if seconds:
         timer = threading.Timer(seconds, finish)

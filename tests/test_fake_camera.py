@@ -7,6 +7,7 @@ that the real camera agrees. One test, one fake process.
 """
 import contextlib
 import io
+import json
 import os
 import socket
 import subprocess
@@ -125,7 +126,7 @@ def test_focus():
             cam.start_live()
             assert cam.events()[0xD209] == 0
             port = free_port()                   # the preview page's Focus button, as the browser sends it
-            server = threading.Thread(target=serve, args=(cam, "127.0.0.1", port, 4))
+            server = threading.Thread(target=serve, args=(cam, "127.0.0.1", port, 9))
             server.start()
             fetch(port, "/")
             assert b" 204 " in post(port, "/focus/down")
@@ -148,6 +149,29 @@ def test_focus():
             cam.release_focus()                  # must wait for the lock to finish, then release it
             lock.join(5)
             assert cam.events()[0xD209] == 0
+            cam.release_focus()
+            cam.focus((5, 2))                    # a chosen cell: operation 0x9026 with one number, aspect 3:2, column, row
+            assert cam.events()[0xD17C] == 0x03020502
+            cam.release_focus()
+            assert b" 204 " in post(port, "/focus/down?cell=3,3")   # a click on the picture
+            assert cam.events()[0xD17C] == 0x03020303
+            state = json.loads(fetch(port, "/state").split(b"\r\n\r\n", 1)[1])
+            assert state == {"aw": 3, "ah": 2, "col": 3, "row": 3, "cols": 13, "rows": 7}, state
+            assert b" 204 " in post(port, "/focus/up")
+            assert cam.events()[0xD17C] == 0x03020303      # the point stays after the release
+            assert b" 204 " in post(port, "/focus/down")   # the Focus button: at the square, not at the centre
+            assert cam.events()[0xD17C] == 0x03020303
+            assert b" 204 " in post(port, "/focus/up")
+            cam.focus()                                    # no cell: the camera goes to the centre
+            assert cam.events()[0xD17C] == 0x03020704
+            cam.release_focus()
+            assert b" 204 " in post(port, "/focus/down?cell=3,3")
+            assert cam.events()[0xD17C] == 0x03020303
+            assert b" 204 " in post(port, "/focus/up")
+            assert b" 500 " in post(port, "/focus/down?cell=14,1")  # outside the 13 x 7 grid: refused, nothing sent
+            assert b" 500 " in post(port, "/focus/down?cell=x")
+            assert cam.events()[0xD17C] == 0x03020303
+            assert b'id=pt' in fetch(port, "/")
             server.join(15)
             assert not server.is_alive()
     finally:

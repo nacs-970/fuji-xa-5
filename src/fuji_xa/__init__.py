@@ -34,6 +34,8 @@ OK = 0x2001
 P_EVENTS, P_CAMERA_STATE, P_CLIENT_STATE = 0xD212, 0xDF00, 0xDF01
 P_IMAGE_GET_VER, P_GET_OBJ_VER, P_REMOTE_VER, P_REMOTE_GET_OBJ_VER = 0xDF21, 0xDF22, 0xDF24, 0xDF25
 P_OBJECT_COUNT, P_CORRECT_FILE_SIZE = 0xD222, 0xD227
+P_FOCUS_POINT = 0xD17C   # the app calls it S1 lock: aspect width, aspect height, column, row
+GRID = (13, 7)           # columns and rows of the autofocus grid, from the property's range maximum (run 45)
 REMOTE_MODE, IMAGE_VIEW_MODE, REMOTE_VERSION = 5, 11, 0x2000C
 CHUNK = 0x100000
 
@@ -169,7 +171,7 @@ class Camera:
                     break
                 else:
                     raise FujiError(f"unexpected container type {ctype} after operation 0x{code:04x}")
-        log.debug("operation 0x%04x %s -> 0x%04x, %d bytes, %.2f s", code, params, rcode, len(payload), time.time() - t0)
+        log.debug("operation 0x%04x %s -> 0x%04x, %d bytes, %.2f s", code, [hex(p) for p in params], rcode, len(payload), time.time() - t0)
         if ok is not None and rcode not in ok:
             raise FujiError(f"operation 0x{code:04x} answered 0x{rcode:04x}", rcode)
         return rcode, payload
@@ -275,18 +277,31 @@ class Camera:
         log.warning("shutter accepted, but no CaptureComplete event within %.0f s", timeout)
         return False
 
-    def focus(self):
-        """Hold the half press: the camera runs autofocus at ITS OWN point and the lens moves (runs 38 to 40). The focus
-        stays after `release_focus()`. The point cannot be chosen: writing 0xD17C is ignored. CHANGES CAMERA STATE.
+    def focus(self, cell=None):
+        """Hold the half press: the camera runs autofocus and the lens moves (runs 38 to 40). The focus stays after
+        `release_focus()`. CHANGES CAMERA STATE.
+
+        `cell=(column, row)` (columns 1 to 13, rows 1 to 7, from the top left) focuses at that point: the camera is sent
+        operation 0x9026 with one number, the same layout as property 0xD17C, which is what the official app does for a tap.
+        On the X-A5 the lens focused at the chosen cell and the focus point stayed there after the release (owner, run 46).
+        Without `cell` the camera moves the point to the centre and focuses there. (Writing 0xD17C does neither.)
 
         Call `release_focus()` afterwards (`close()` does it too). Public notes say an X-T3 over USB stops focusing while it is held.
-        Operation 0x9026 is a vendor operation with no public description; we send it with no parameters.
         """
+        params = ()
+        if cell is not None:
+            column, row = cell
+            if not (1 <= column <= GRID[0] and 1 <= row <= GRID[1]):
+                raise FujiError(f"focus cell {cell} is outside the {GRID[0]} x {GRID[1]} grid")
+            aspect = (self.props.get(P_FOCUS_POINT) or 0x03020000) >> 16   # the picture aspect, 3:2 on the X-A5
+            params = (aspect << 16 | column << 8 | row,)
         self.start_live()
         with self._focus_lock:   # the preview page sends "down" and "up" from two threads, quick clicks raced (run 41)
             if not self._locked:
-                self.op(0x9026)
+                self.op(0x9026, params)
                 self._locked = True
+                if params:
+                    self.props[P_FOCUS_POINT] = params[0]   # the camera reads it back; this keeps a quick next press in step
 
     def release_focus(self):
         """Let go of the half press (operation 0x9027). Does nothing if `focus()` was not called."""

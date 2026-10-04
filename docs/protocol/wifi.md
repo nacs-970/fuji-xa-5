@@ -93,7 +93,7 @@ Poll it as a substitute for events on the control connection.
 | Property | Meaning | Values seen on the X-A5 |
 |----------|---------|-------------------------|
 | `0xDF00` | camera state | 6 at the start of every session (remote access). After setting client state 11 it reads `0x0B`, meaning not known |
-| `0xDF01` | client state, set by the client | read 16 (`0x10`) right after OpenSession, before we set it (run 16). We set 5 (remote mode) and 11 (image view). Both accepted |
+| `0xDF01` | client state, set by the client | read 16 (`0x10`) right after OpenSession, before we set it (run 16). We set 5 (remote mode) and 11 (image view). Both accepted. The official app also sets 1, 2, 8 and 9 (photo receiver and camera browsing) and 7 (before it closes after an unknown mode); see the [APK finding](../findings/2026-10-05-apk-analysis.md) |
 | `0xDF21` | image-get version | 3 |
 | `0xDF22` | get-object version | 3 |
 | `0xDF24` | remote version | read `0x20003`. We set `0x2000C` (the value from public notes). Accepted |
@@ -103,9 +103,9 @@ Poll it as a substitute for events on the control connection.
 | `0x5007` | F-number | `0xAA` at f/1.7 and `0x168` (360) at f/3.6 (run 19): the value is the f-number times 100. A write of `0x118` (f/2.8, 2 bytes) answered `0x200F` and changed nothing (run 21). `GetDevicePropValue` returns `0xF018` for it, not `0xAA`: not understood |
 | `0x5005` | white balance | 2 while the owner's setting was auto |
 | `0xD001` | film simulation | `0xB` for Classic Chrome (run 18), 1 for Standard/Provia (run 19) |
-| `0xD02A` | ISO | `0x640` (1600) for ISO 1600 (run 18). `0x80000C80` for ISO Auto3 (run 19): the top bit may mean auto and the low part 3200 (`0xC80`) may be the auto limit or the chosen ISO. Not known which |
+| `0xD02A` | ISO | `0x640` (1600) for ISO 1600 (run 18). `0x80000C80` for ISO Auto3 (run 19). The camera's own value list (`0x902B`, run 45) shows the rule: a plain number is the ISO (`0xC8` = 200 to `0x3200` = 12800), `0x4000....` are the extended values (`0x40000064` = 100, `0x40006400`, `0x4000C800`), and `0x80000000` plus a number is Auto up to that ISO, so `0x80000C80` is Auto up to 3200 |
 | `0xD240` | shutter speed | `0x80030D40` for 1/200 (run 18), `0x8000EA60` for 1/60 (run 19) and `0x8007A120` for 1/500 (run 20, set by the owner). and `0x800186A0` for 1/100 (run 21, set by the owner). All fit: low part = denominator x 1000 (200000, 60000, 500000, 100000). In run 19 the owner had set 1/100 on the camera (dial on M) and the screen showed 1/60 after the session. Who changed it is not known. Four data points, fractions of a second only. The top bit was set in all three and is not understood. In run 20 the screen showed 1/500 before and after the session, so the session does not change the speed |
-| `0xD17C` | focus point position (libgphoto2 names it FocusMeteringMode) | 4 bytes `03 02 CC RR`: `CC` = column 1 to 13 (left to right), `RR` = row 1 to 7 (top to bottom), a 13 x 7 grid of 91 points. Single point: top-left `0x03020101`, top-right `0x03020D01`, bottom-right `0x03020D07`, centre with DISP/BACK `0x03020704` (runs 31 to 34). A hand-set "centre" and ZONE read `0x03020804`. The high bytes `03 02` never changed, meaning not known. A write of the 4 bytes was accepted (`0x2001`) and the change list followed it (runs 35 to 37), but the focus frame stayed at the centre and the photo's `FocusPixel` metadata (2983, 1983) shows autofocus ran at the centre: the write is ignored |
+| `0xD17C` | focus point position (libgphoto2 names it FocusMeteringMode) | 4 bytes `03 02 CC RR`: `CC` = column 1 to 13 (left to right), `RR` = row 1 to 7 (top to bottom), a 13 x 7 grid of 91 points. Single point: top-left `0x03020101`, top-right `0x03020D01`, bottom-right `0x03020D07`, centre with DISP/BACK `0x03020704` (runs 31 to 34). A hand-set "centre" and ZONE read `0x03020804`. The high bytes `03 02` never changed. The official app's code (APK 4.10.2, [finding](../findings/2026-10-05-apk-analysis.md)) calls this property S1 lock and shows they are the picture aspect, 3:2, and that the app's touch focus sends one integer in this same layout to `0x9026`: the app's native code sends operation `0x9026` with that integer as its one parameter and no data, and `0x9027` with none: not yet tried with the parameter To move the focus point, send it as the parameter of `0x9026` (section 6), not as a write. A write of the 4 bytes was accepted (`0x2001`) and the change list followed it (runs 35 to 37), but the focus frame stayed at the centre and the photo's `FocusPixel` metadata (2983, 1983) shows autofocus ran at the centre: the write is ignored |
 | `0x500A` | focus mode (name from standard PTP) | `0x8001` with the owner's camera set to AF-S (run 18) and to AF-C (run 19). It does not tell them apart |
 | `0xD209` | AF status (libgphoto2 name) | 0 at rest. 1 after vendor op `0x9026`, back to 0 after `0x9027` (run 38). libgphoto2 reads 1 as busy, 2 ok, 3 failed over USB: not checked here, we read it once after 3 s and saw 1 |
 | `0x500C` | flash mode | 2 while the built-in flash was closed (it must be popped up by hand on this camera). In standard PTP 2 is flash off |
@@ -120,10 +120,19 @@ The settings rows above (`0x5007`, `0x5005`, `0xD001`, `0xD02A`, `0xD240`) come 
 screen (all but `0x5010`), so one data point each. `GetDevicePropDesc` (`0x1014`) does not give the allowed values over Wi-Fi: the
 standard properties answer `0x2007` and the Fuji ones `0x200A`. `GetDevicePropValue` (`0x1015`) answers `0x2001`
 for `0x5007` (run 21), but with a different number than the change list. Writing `0x5007` was refused with `0x200F` and writing `0xD240` (4 bytes) with `0x2007`, both with live view running
-and the dial on M (runs 21 and 22). Both left the value unchanged. Writing the other settings is not tested.
+and the dial on M (runs 21 and 22). Both left the value unchanged. Writing the other settings is not tested. The official app does not write absolute values for F-number, shutter speed or exposure bias: its native code sends vendor operations `0x902D` (F-number), `0x902C` (shutter speed) and `0x902E` (exposure bias), each with one parameter that the app sets to 0 or 1 (disassembly of the APK, [finding](../findings/2026-10-05-apk-analysis.md)); not tried on the camera.
 
 Properties from the libgphoto2 capture sequence (`0xD207`, `0xD208`, `0x500D`) answer `0x200A` (not supported)
 on the X-A5. Do not use them.
+
+**Property descriptions (vendor operation `0x902B`, observed 2026-10-05, run 45).** Sent with no parameters in remote mode, it
+answered `0x2001` and 360 bytes: a 32-bit count (10), then per property a 32-bit size that includes its own four bytes and a
+standard PTP property description (code, type, get/set flag, default, current value, form flag, then a range or a list of
+allowed values). The ten properties are `0xD019`, `0x500C`, `0x5012`, `0xD17C`, `0xD245`, `0xD240`, `0x5005`, `0x5007`,
+`0xD001` and `0xD02A`. For `0xD17C` the range maximum is `0x10090D07`: the low two bytes are the AF grid, 13 columns by 7
+rows, and the high two bytes are the maximum aspect, 16:9. The allowed values for ISO, film simulation, white balance and AF
+select mode are in the [findings](../findings/2026-10-05-library-first-real-run.md) ("Property descriptions"). The get/set
+flag is not a promise: `0x5007` and `0xD240` are flagged get/set and our writes were refused.
 
 ## 5. Remote mode and live view
 
@@ -162,6 +171,13 @@ sharp and a toy 15 cm from the lens was soft (too close to focus). The owner hea
 sound (run 13). The focus point position can be read (`0xD17C`, section 4) and a write of it is ignored.
 
 **Starting autofocus from the PC (runs 38 to 40, observed).** Vendor operation `0x9026` (libgphoto2: SetFocusPoint, `libfuji`: LockS1Lock) with no parameters and no data, sent in remote mode, answered `0x2001`. `0xD209` went from 0 to 1 and the owner heard the lens move. Vendor operation `0x9027` (UnlockS1Lock) with no parameters answered `0x2001` and `0xD209` went back to 0. No photo was taken. The camera's own shutter button does not start autofocus during a session (owner, runs 28, 41 and 44), and the camera reports none of its button presses to the PC: the property list and the event port stayed silent for 75 s while the owner pressed the shutter (half-press), Q, DISP/BACK and Menu (run 44). A half-press does wake the black screen. The owner says the dials and a full press of the shutter do nothing either (no photo taken). So the PC is the only way to focus; why the buttons are dead is not known. Not known: which focus point the lock uses, what parameters do, whether it is a half press, and how long the camera stays locked. Run 39: `0xD209` stayed 1 for the whole lock (about 5 s) and never reached 2 or 3, so it looks like "locked" here. A shutter command sent while locked answered `0x2001` and the photo's `FocusPixel` was the centre (2983, 1983), although `0xD17C` had been written to top-left first: the lock without parameters does not use the written point. Run 40 (live view only, no photo) showed the same: the lens focused on the object near the centre, not at the written top-left corner, and kept that focus after `0x9027`.
+
+**Choosing the focus point (runs 45 and 46, observed).** Vendor operation `0x9026` with **one 32-bit parameter** focuses the
+camera at that cell: the parameter is the picture aspect (`03 02`), the column (1 to 13) and the row (1 to 7), the layout of
+`0xD17C`, as the official app sends for a tap ([APK finding](../findings/2026-10-05-apk-analysis.md)). The owner saw the lens
+focus at the clicked point. The point stays after `0x9027`. With no parameter the camera moves the point to the centre and
+focuses there. Writing `0xD17C` has no effect. The grid is 13 by 7 on the X-A5 (range maximum of `0xD17C`, run 45); the app
+reads it from the camera.
 
 **Checking where autofocus ran.** Every photo carries it in its Fuji MakerNote: `exiftool -FocusPixel -AFMode photo.JPG`
 (tag `0x1023`, two numbers: x and y in pixels of the 6000x4000 picture, centre `3000 2000`). If the autofocus grid spans
@@ -258,7 +274,8 @@ Speed: about 5 MB/s. A 6 to 7 MB full-size JPEG took 1.2 to 1.4 s.
 
 ## 9. What is not known or not done
 
-- How to choose the focus point from the PC (the point can be read, `0xD17C`, and a write of it is ignored; whether `0x9026` uses it is not tried), manual focus, and whether the lens already moves in live view. Autofocus can be started with `0x9026` (run 38). DeviceInfo does not list `0x9026` and `0x9027`, but it does not list the working `0x100E` either (run 29).
+- Manual focus, and whether the lens already moves in live view. Autofocus and the focus point are solved: `0x9026` with a cell (runs 45 and 46). DeviceInfo does not list `0x9026` and `0x9027`, but it does not list the working `0x100E` either (run 29).
+- Vendor operation `0x902B` (no parameters, a read) returns the descriptions of 10 properties with ranges and allowed values (run 45, see the property table notes in section 4); the standard `GetDevicePropDesc` is still refused. Movies (`0x9020` start, `0x9021` stop) are not tried either ([APK finding](../findings/2026-10-05-apk-analysis.md)).
 - What the `0xC001` event parameter is, and what `0xD222` counts.
 - Why one init with the accepted prefix was rejected once.
 - The allowed values of the camera settings, and how to set them (ISO, aperture, shutter speed, white balance, film simulation, exposure compensation). Movies, thumbnails.
