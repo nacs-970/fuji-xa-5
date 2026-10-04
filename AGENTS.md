@@ -8,7 +8,8 @@ status and [docs/project-overview.md](docs/project-overview.md) for the full pic
 Open-source remote shooting for the Fujifilm X-A5 (and later other older X-A bodies) from a Linux PC,
 without Fuji's discontinued smartphone app. The camera is controlled over Wi-Fi with a Fuji-specific
 variant of PTP/IP. Over USB the X-A5 only supports picture download. As of 2026-10-04 our own script
-opens a session, enters remote mode and reads live view over Wi-Fi. Shutter release is the next step.
+opens a session, enters remote mode, reads live view, releases the shutter and downloads the picture over
+Wi-Fi. The next steps are a clean client in `src/` and a libgphoto2 patch.
 
 ## Version control: use git
 
@@ -25,7 +26,8 @@ opens a session, enters remote mode and reads live view over Wi-Fi. Shutter rele
   [plan 07](docs/plans/07-implementation.md)).
 - Exception: `docs/artifacts/x-a5-manual/` (Fuji's X-A5 manual) is meant to be committed. The owner decided
   this. Put nothing else from Fuji in `docs/artifacts/`.
-- The branch is `master` and there are no commits yet. Do not rename or push anything unless asked.
+- The branch is `master`. The remote `origin` is the private GitHub repo `nacs-970/fuji-xa-5`. Push only when
+  the owner asks. Do not rename the branch, make the repo public or add a tag unless asked.
 
 ## Rules for touching the camera
 
