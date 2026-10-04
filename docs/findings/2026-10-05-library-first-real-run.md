@@ -42,8 +42,11 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 32 | `props`, single point at top-right | `xa5-probe` | **Worked.** `0xD17C` = `0x03020D01`. Nothing else changed |
 | 33 | `props`, single point at bottom-right | `xa5-probe` | **Worked.** `0xD17C` = `0x03020D07`. Nothing else changed |
 | 34 | `props`, single point at the centre, chosen with DISP/BACK (owner: "ready, single center") | `xa5-probe` | **Worked.** `0xD17C` = `0x03020704`. Nothing else changed |
+| 35 | `set 0xd17c 0x03020101 --size 4`: write the focus point to top-left, from the centre (`0x03020704`). The owner said "ready, yes write". No photo | `xa5-probe` | **The camera answered `0x2001`** and its change list then read `0x03020101`. The direct `GetDevicePropValue` returned `ff 18 f0 9f` before and after, the same bytes as for `0xD240` in run 22, so it does not show the value. After the session the owner pressed the shutter and the focus frame was **at the centre**, not top-left (the owner had not reset it by hand): no visible effect |
+| 36 | `focus 1 1 --shoot` (new command: write the point, shoot, download). The owner said "ready, yes shoot" with the point at the centre | `xa5-probe` | The write was accepted again (`0x2001`, the list read `0x03020101`). One photo, `DSCF8720.JPG`, 6000x4000. Its metadata says autofocus ran at pixel (3000, 2000), the centre, not at top-left: see "Writing the focus point" |
+| 37 | `focus 1 1 --shoot` again, after the owner set up a scene with detail near the top-left. The owner said "retry 1 1 single shot, ready" | `xa5-probe` | The write was accepted again (`0x2001`, the list read `0x03020101`). One photo, `DSCF8721.JPG`. **Its metadata says autofocus ran at pixel (2983, 1983)**, the centre of the 6000x4000 frame, not near (231, 286), where column 1, row 1 would be. So the written point was not used |
 
-Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 to 34.
+Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 to 35. Runs 36 and 37 took one each.
 
 ## What run 3 showed
 
@@ -225,6 +228,30 @@ single point has 5 sizes, not tested).
 `0xD209` (AF status in libgphoto2) read 0 in all runs. The focus point can be read. Setting it, or starting autofocus
 from the PC, is not tested: writes to `0x5007` and `0xD240` were refused (runs 21 and 22), the libgphoto2 USB focus
 route (`0xD208`) was not supported over Wi-Fi (2026-10-04), and the vendor operations are gated.
+
+## Writing the focus point (runs 35 to 37)
+
+The camera accepted a 4-byte write of `0xD17C` (`0x03020101`) with `0x2001` and then reported the new value in its
+change list, in runs 35, 36 and 37. That differs from `0x5007` and `0xD240`, which were refused (runs 21 and 22). But the
+write has no effect on autofocus:
+- After run 35 the owner found the focus frame at the centre.
+- Run 36 wrote the point and shot in the same session. Its photo showed no sign of autofocus at top-left (a plain wall
+  there, so weak evidence by eye).
+- Run 37 did the same with a textured scene. Eyeballing and a sharpness map were again not decisive, because the wall and
+  the objects near it sit in one plane. **The photo's own metadata is decisive.** The Fuji MakerNote tag `0x1023`
+  (`FocusPixel`, read with Pillow and with `exiftool`) is (2983, 1983) in run 37: the centre of the 6000x4000 picture.
+  Column 1, row 1 would be near (231, 286). So the point was not used.
+
+`FocusPixel` is a way to check where autofocus ran for any photo, with no special scene. Earlier remote shots read
+(3000, 2000) exactly (runs 23 and 24 and run 36), although the camera's own point was column 8 at that time (which would
+be near x = 3462). So a shot released from the PC seems to focus at the exact centre whatever point the camera shows.
+That is one tag read from a few photos, not a proof. Not checked: the same tag on a photo taken with the camera's own
+shutter button at another point.
+
+Conclusion so far: settings cannot be changed from the PC on the X-A5 over Wi-Fi in the ways we tried. `0x5007` and
+`0xD240` were refused, and `0xD17C` was accepted and ignored. The protocol-state writes (`0xDF01`, `0xDF24`, `0xD227`)
+work, because remote mode and image view depend on them. The `focus` command written for run 36 was removed again,
+because `set` already writes a property and `shoot` already shoots.
 
 ## Camera settings (run 18)
 

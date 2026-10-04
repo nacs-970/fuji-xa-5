@@ -5,6 +5,8 @@
 The fake camera is built from public notes and our logs, so passing proves our sequencing and parsing, not
 that the real camera agrees. One test, one fake process.
 """
+import contextlib
+import io
 import os
 import socket
 import subprocess
@@ -47,6 +49,10 @@ def test_live_shoot_download():
             cam.start_live()
             cam.events()
             assert cam.props[0x5007] == 0x118
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            assert main(["--ip", "127.0.0.1", "props"]) == 0
+        assert "focus point: column 7 of 13, row 4 of 7" in out.getvalue()   # 0xD17C = 0x03020704
     finally:
         fake.kill()
         fake.wait()

@@ -122,7 +122,7 @@ def handle(c):
         elif code == 0x1015:
             prop = params[0]
             if prop == 0xD212:
-                evs = [(0xDF00, 6 if state["client_state"] in (5, 11) else 2), (0x5007, state["fnumber"])]
+                evs = [(0xDF00, 6 if state["client_state"] in (5, 11) else 2), (0x5007, state["fnumber"]), (0xD17C, 0x03020704)]
                 if state["view"]:
                     evs.append((0xD222, state["objects"]))
                 payload = struct.pack("<H", len(evs)) + b"".join(struct.pack("<HI", a, b) for a, b in evs)

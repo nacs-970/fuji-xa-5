@@ -86,7 +86,7 @@ def main(argv=None):
     p.add_argument("--port", type=int, default=8080, help="port to listen on")
     p.add_argument("--seconds", type=float, help="stop after this long (default: until Ctrl-C)")
     sub.add_parser("props", help="print the properties the camera reports, with current values (read-only, no photo)")
-    p = sub.add_parser("set", help="write one camera setting and read it back (CHANGES CAMERA STATE). The X-A5 refused the F-number and shutter speed so far")
+    p = sub.add_parser("set", help="write one camera setting and read it back (CHANGES CAMERA STATE). The X-A5 refused the F-number and shutter speed, and accepted the focus point (0xD17C) without using it")
     p.add_argument("prop", type=lambda x: int(x, 0), help="property code from `props`, for example 0x5007")
     p.add_argument("value", type=lambda x: int(x, 0), help="new value, for example 0x118 for f/2.8")
     p.add_argument("--size", type=int, default=2, choices=(2, 4), help="bytes of the value")
@@ -121,6 +121,8 @@ def main(argv=None):
                 cam.events()
                 for prop in sorted(cam.props):   # GetDevicePropDesc is not served over Wi-Fi (2026-10-05), so values only
                     print(f"{prop:#06x} {cam.props[prop]:#x}")
+                if 0xD17C in cam.props:   # focus point, decoded from four points on the camera (finding, runs 31 to 34)
+                    print(f"focus point: column {cam.props[0xD17C] >> 8 & 0xFF} of 13, row {cam.props[0xD17C] & 0xFF} of 7")
                 return 0
             if a.cmd == "set":
                 cam.start_live()
