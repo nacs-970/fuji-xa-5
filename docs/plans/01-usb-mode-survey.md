@@ -1,6 +1,8 @@
 # Plan 01: USB mode survey
 
-Status: not started. Risk: none, read-only. Needs installs: none.
+Status: done 2026-10-05, result negative: one USB mode, PTP download only. See
+[finding](../findings/2026-10-05-usb-mode-survey.md). Menu labels were not written down by the owner. Risk: none,
+read-only. Needs installs: none.
 
 ## Question
 
