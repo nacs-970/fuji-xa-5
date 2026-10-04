@@ -36,8 +36,14 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 26 | Ending experiment 2: live view 2 s, image view (picture count 15, no download), then `0xDF01` = 5 again. No photo | `xa5-probe` | The camera answered `0x2001`, then closed the connection 3.1 s later (as in run 23). **The screen came back to live view by itself, but the shutter button and all other buttons did nothing except Q, the movie button and Fn. Switching the camera off and on fixed it** (owner report) |
 | 27 | `serve` (new, MJPEG on `127.0.0.1:8080`) through a scratch script: its own client read the stream for 5 s while the server ran 45 s. Live view only, no photo | `xa5-probe` | **Worked.** 83 frames in 5.0 s (16.6 fps), all valid JPEG, 10 580 to 13 061 bytes. The saved frame is a real 640x480 picture. The owner watched it in a browser: "very smooth". The low rate was not explained, because this run did not count frames at the camera (see run 28) |
 | 28 | `serve` for 60 s with a sample every 2 s: frames read from the camera, frames handed to viewers, CPU and RAM of our process. Browser connected. No photo | `xa5-probe` | **Worked.** The camera sent 59 to 60 fps and viewers got the same, except from about 14 s to 20 s: 24 to 27 fps, and 36 fps in one sample (camera and viewers equal, so the camera sent fewer; the owner did nothing at that time, cause not known). Our process used 1.7 to 2.1 % of one core at 60 fps and 0.7 % at 25 fps, and 28 to 29 MB of RAM (peak 29 MB, flat). Owner: "cpu + ram usage is normal". The owner also pressed the shutter button for autofocus and it did not work (when in the run is not recorded) |
+| 29 | Scratch script: `GetDeviceInfo` before and after remote mode starts. Read-only, no photo | `xa5-probe` | **Worked.** The lists are identical in both: 25 operations, 7 events, 8 properties, nothing new, nothing gone. Neither lists `0x9026`, `0x9027`, `0x100E`, `0x101C` or `0x1018`. The working `0x100E`, `0x101C` and `0x1018` are not listed either, so the list does not tell what the camera accepts |
+| 30 | `props` with the AF mode on ZONE (owner: "ready, zone"). No photo | `xa5-probe` | **Worked.** `0xD17C` = `0x03020804`, the same as before. No setting changed. The picture count read 16 (15 at run 26, the owner was asked about a photo and did not say) |
+| 31 | `props`, single point at top-left (owner: "ready, single top-left") | `xa5-probe` | **Worked.** `0xD17C` = `0x03020101`. Nothing else changed |
+| 32 | `props`, single point at top-right | `xa5-probe` | **Worked.** `0xD17C` = `0x03020D01`. Nothing else changed |
+| 33 | `props`, single point at bottom-right | `xa5-probe` | **Worked.** `0xD17C` = `0x03020D07`. Nothing else changed |
+| 34 | `props`, single point at the centre, chosen with DISP/BACK (owner: "ready, single center") | `xa5-probe` | **Worked.** `0xD17C` = `0x03020704`. Nothing else changed |
 
-Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 and 28.
+Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 to 34.
 
 ## What run 3 showed
 
@@ -193,6 +199,32 @@ The only autofocus seen so far runs on the shutter command from the PC (run 13).
 says a half-press wakes the black screen, so what the camera buttons do during a session is not settled: this run
 shows only that a press did not start autofocus. Whether the PC can start autofocus without taking a picture is not
 known.
+
+## Focus point (runs 29 to 34)
+
+DeviceInfo (run 29) is the same before and after remote mode starts and does not list `0x100E`, `0x101C` or `0x1018`,
+which work. So its operation list cannot tell whether `0x9026` or `0x9027` (named LockS1Lock and UnlockS1Lock in
+`libfuji`, SetFocusPoint and ResetFocusPoint in libgphoto2, both read 2026-10-05) would be accepted. They were not sent.
+
+Runs 30 to 34 moved the focus point on the camera before each `props`. Only `0xD17C` changed:
+
+| Setting on the camera | `0xD17C` | Second-lowest byte | Lowest byte |
+|-----------------------|----------|--------------------|-------------|
+| single point, top-left | `0x03020101` | 1 | 1 |
+| single point, top-right | `0x03020D01` | 13 | 1 |
+| single point, bottom-right | `0x03020D07` | 13 | 7 |
+| single point, centre with DISP/BACK | `0x03020704` | 7 | 4 |
+| single point set by hand to "centre" (before run 23), and ZONE in run 30 | `0x03020804` | 8 | 4 |
+
+So the second-lowest byte is the column (1 to 13, left to right) and the lowest byte is the row (1 to 7, top to
+bottom). 13 x 7 is 91 points. The exact centre is column 7, row 4. The point the owner set by hand earlier was one column
+right of it. In zone mode the value was the zone's position, as far as one reading shows. The two high bytes `03 02` did
+not change in any run, including zone mode. What they are is not known (the focus frame size is a guess, the manual says
+single point has 5 sizes, not tested).
+
+`0xD209` (AF status in libgphoto2) read 0 in all runs. The focus point can be read. Setting it, or starting autofocus
+from the PC, is not tested: writes to `0x5007` and `0xD240` were refused (runs 21 and 22), the libgphoto2 USB focus
+route (`0xD208`) was not supported over Wi-Fi (2026-10-04), and the vendor operations are gated.
 
 ## Camera settings (run 18)
 

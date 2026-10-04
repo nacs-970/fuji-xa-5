@@ -105,6 +105,7 @@ Poll it as a substitute for events on the control connection.
 | `0xD001` | film simulation | `0xB` for Classic Chrome (run 18), 1 for Standard/Provia (run 19) |
 | `0xD02A` | ISO | `0x640` (1600) for ISO 1600 (run 18). `0x80000C80` for ISO Auto3 (run 19): the top bit may mean auto and the low part 3200 (`0xC80`) may be the auto limit or the chosen ISO. Not known which |
 | `0xD240` | shutter speed | `0x80030D40` for 1/200 (run 18), `0x8000EA60` for 1/60 (run 19) and `0x8007A120` for 1/500 (run 20, set by the owner). and `0x800186A0` for 1/100 (run 21, set by the owner). All fit: low part = denominator x 1000 (200000, 60000, 500000, 100000). In run 19 the owner had set 1/100 on the camera (dial on M) and the screen showed 1/60 after the session. Who changed it is not known. Four data points, fractions of a second only. The top bit was set in all three and is not understood. In run 20 the screen showed 1/500 before and after the session, so the session does not change the speed |
+| `0xD17C` | focus point position (libgphoto2 names it FocusMeteringMode) | 4 bytes `03 02 CC RR`: `CC` = column 1 to 13 (left to right), `RR` = row 1 to 7 (top to bottom), a 13 x 7 grid of 91 points. Single point: top-left `0x03020101`, top-right `0x03020D01`, bottom-right `0x03020D07`, centre with DISP/BACK `0x03020704` (runs 31 to 34). A hand-set "centre" and ZONE read `0x03020804`. The high bytes `03 02` never changed, meaning not known. Read only, a write is not tested |
 | `0x500A` | focus mode (name from standard PTP) | `0x8001` with the owner's camera set to AF-S (run 18) and to AF-C (run 19). It does not tell them apart |
 | `0x500C` | flash mode | 2 while the built-in flash was closed (it must be popped up by hand on this camera). In standard PTP 2 is flash off |
 | `0x500E` | exposure mode | 1 with the mode dial on M in runs 18 and 19 (the owner first said auto, then corrected it). In standard PTP 1 is manual, which fits. One value only |
@@ -157,7 +158,7 @@ With open capture running, send **one** `InitiateCapture` (`0x100E`, parameters 
 at once (observed, three runs). No focus step is needed. The camera runs its own autofocus on this command, with
 the focus mode and focus point set on the camera. With the point on the centre and the wall 60 cm away, the wall was
 sharp and a toy 15 cm from the lens was soft (too close to focus). The owner heard the lens move before the shutter
-sound (run 13). Focus control from the PC is not known.
+sound (run 13). Focus control from the PC is not known, but the focus point position can be read (`0xD17C`, section 4).
 
 After the command the camera sends events on TCP 55741. Each event is a 28-byte container: length 28,
 type 4, code, transaction id (1), four u32 parameters, the fourth always 0 (observed). Read the container by
@@ -241,7 +242,7 @@ Speed: about 5 MB/s. A 6 to 7 MB full-size JPEG took 1.2 to 1.4 s.
 
 ## 9. What is not known or not done
 
-- How to control focus from the PC (a focus point, manual focus), and whether the lens already moves in live view.
+- How to set the focus point or start autofocus from the PC (the point can be read, `0xD17C`), manual focus, and whether the lens already moves in live view. DeviceInfo does not list `0x9026` and `0x9027`, but it does not list the working `0x100E` either (run 29).
 - What the `0xC001` event parameter is, and what `0xD222` counts.
 - Why one init with the accepted prefix was rejected once.
 - The allowed values of the camera settings, and how to set them (ISO, aperture, shutter speed, white balance, film simulation, exposure compensation). Movies, thumbnails.
