@@ -1,0 +1,16 @@
+# Raw evidence and third-party material stay local. Only the READMEs are tracked.
+# Captures can contain the camera serial number, MAC address, SSID and host name.
+captures/*
+!captures/README.md
+
+# APKs, firmware, decompiler output, Ghidra projects. Never commit Fuji binaries.
+artifacts/*
+!artifacts/README.md
+
+# Editor and OS noise
+*.swp
+.DS_Store
+
+# Python build output
+__pycache__/
+*.pyc
