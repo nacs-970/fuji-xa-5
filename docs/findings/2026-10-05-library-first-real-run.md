@@ -19,8 +19,10 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 9 | `shoot -n 3`, no busy retry yet | `fuji-xa` | Shot 1 accepted. Shot 2's `0x100E` answered `0x2019` (Device Busy) right after the completion event, so the library raised and the session ended cleanly. One picture was taken and not downloaded |
 | 10 | `shoot -n 3` with a busy retry, HIGH PERFORMANCE on, "change" not pressed | `fuji-xa` | All 3 shots accepted: shots 2 and 3 each answered `0x2019` once, then `0x2001` after 0.5 s. The switch to image view and the download of handle 1 worked (`DSCF8712.JPG`, 6 823 794 bytes), but the CLI could not save it because the folder did not exist (our bug, fixed). Handles 2 and 3 were not tried |
 | 11 | `download -n 3` | `fuji-xa` | **Worked.** Handles 1, 2 and 3 were `DSCF8712`, `DSCF8711` and `DSCF8710`, the three pictures of run 10, newest first. All 6000x4000 JPEG, 6.5 to 7.0 MB, in one session, every operation `0x2001` |
+| 12 | `shoot -d /tmp/xa5-focus` (the owner said "ready" to the proposed one-photo test, subject at normal distance) | `fuji-xa` | **Worked.** One shutter release, handle 1 downloaded: `DSCF8713.JPG`, 6000x4000 JPEG, 5.2 MB, every operation `0x2001`. The picture is sharp where the focus fell (see "Focus") |
+| 13 | `shoot -d /tmp/xa5-focus2` (the owner said yes to one photo), focus point on the centre, wall 60 cm away, toy 15 cm away | `fuji-xa` | **Worked.** One shutter release, handle 1 downloaded: `DSCF8714.JPG`, 6000x4000 JPEG, 7.3 MB, every operation `0x2001`. The wall in the centre is sharp, the toy is soft (see "Focus") |
 
-Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy.
+Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test.
 
 ## What run 3 showed
 
@@ -42,8 +44,8 @@ Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one pictur
   print the event itself, so this is inferred from the missing warning.
 - `0xD229` (frames remaining) went from `0x8FE` to `0x8FD` during the wait. After the switch to image view
   `0xD222` read 4, one more than before the shot. The file name `DSCF8707` follows the earlier `DSCF8706`.
-- Handle 1 was the new picture, as before. The picture is a blurred close-up, so the camera is probably not
-  focusing before the shot. That is still not known.
+- Handle 1 was the new picture, as before. The picture is a blurred close-up. See "Focus" below: the blur is
+  probably the subject being closer than the lens can focus.
 - Not checked in this run: the shutter sound and the camera screen afterwards (asked of the owner).
 
 ## What run 7 showed (three-shot test, black screen)
@@ -71,9 +73,42 @@ Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one pictur
   image view once and download handles 1, 2, 3.
 - **Handle 3 works** when the camera holds at least three pictures from the recent shots (it answered `0x2007`
   on 2026-10-04 when the count was 2).
-- The pictures are blurred close-ups of the same scene, as before. Focus before the shot is still not known.
+- The pictures are blurred close-ups of the same scene, as before. See "Focus" below.
 - Runs 10 and 11 reused the name `fuji-xa` without pressing "change" and were accepted at once. That fits the
   one-registered-name theory: the same name reconnects.
+
+## Focus
+
+Owner's report after run 11: autofocus is set in the camera settings, the lens is a 56 mm f/1.7, the subject was
+closer than the lens can focus, and the owner hears the lens adjusting. So the blur comes from the minimum focus
+distance, not from a missing focus step. This is the owner's observation, not a measurement.
+
+Run 12 confirmed it: with the subject at a normal distance, one `0x100E` gave a sharp picture. In
+`DSCF8713.JPG` the wall plates are sharp at full size (the "CLIPSAL" print and the wall texture are crisp), and the
+paper in the foreground is soft, which is depth of field at f/1.7. So the camera runs its own autofocus on the
+remote shutter command and no focus step is needed from the PC. Not tested: whether the lens already moves in live
+view, and focus control from the PC (a chosen focus point, manual focus).
+
+## Focus, run 13
+
+The owner set the focus point to the centre on the camera. The wall behind was about 60 cm away, a toy about 15 cm
+from the lens. `DSCF8714.JPG` shows the wall sharp at full size (plaster texture) and the toy soft. So the camera
+focused on the set point, and the toy is below the lens's minimum focus distance, so it could not be sharp anyway.
+The owner heard the lens move before the shutter sound. Run 12 and run 13 together: the shutter command makes the
+camera run its own autofocus with the settings made on the camera. Not tested: what happens at two different
+distances with the same point (the run 12 distance was not recorded), and any focus control from the PC.
+
+## The camera after the session (runs 12 and 13)
+
+Owner's reports. Run 12: a few seconds after the shot and the download, the camera played its "ready" sound again
+but the screen stayed black. Run 13: the "ready" sound came after the LED went off, and the screen stayed black
+after the PC was back on its own network. A firm press of the shutter button brought the live view back. The
+library ended both sessions cleanly (`0x1016`, then CloseSession `0x1003`, both `0x2001`).
+
+Earlier runs showed the screen returning to the shooting screen after a session (see `docs/protocol/wifi.md`
+section 7). Those were sessions without a download, or the screen was not checked. So a possible link to image
+view (the download) is a guess. Not tested: a live-view-only session followed by a look at the screen, a session
+with a download but a different button press, and whether the library can restore the screen itself.
 
 ## Client name
 

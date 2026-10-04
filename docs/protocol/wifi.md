@@ -138,8 +138,10 @@ About 60 frames per second. A frame with the lens cap on is about 6.6 KB, a norm
 ## 6. Shutter
 
 With open capture running, send **one** `InitiateCapture` (`0x100E`, parameters 0, 0). It returns `0x2001`
-at once (observed, three runs). No focus step is needed. Whether the camera focuses before the shot is not
-known.
+at once (observed, three runs). No focus step is needed. The camera runs its own autofocus on this command, with
+the focus mode and focus point set on the camera. With the point on the centre and the wall 60 cm away, the wall was
+sharp and a toy 15 cm from the lens was soft (too close to focus). The owner heard the lens move before the shutter
+sound (run 13). Focus control from the PC is not known.
 
 After the command the camera sends events on TCP 55741. Each event is a 28-byte container: length 28,
 type 4, code, transaction id (1), four u32 parameters, the fourth always 0 (observed). Read the container by
@@ -170,6 +172,11 @@ shutter or of a download (observed 2026-10-05).
 `TerminateOpenCapture`, then `CloseSession`, then close the sockets. After the client leaves the Wi-Fi, the
 camera shows "connection lost" and returns to its shooting screen. The owner must open the wireless screen
 again before the next session (observed, normal).
+
+After a session with a shot and a download (runs 12 and 13) the screen stayed black once the PC was back on its
+own network, and a firm press of the shutter button brought the live view back. The camera played its "ready"
+sound after the LED went off. A live-view-only session (run 8) was not checked this way. It may be linked to image
+view, which is not tested.
 
 ## 8. Reading pictures
 
@@ -207,7 +214,7 @@ Speed: about 5 MB/s. A 6 to 7 MB full-size JPEG took 1.2 to 1.4 s.
 
 ## 9. What is not known or not done
 
-- Whether the camera focuses before the shot, and how to control focus.
+- How to control focus from the PC (a focus point, manual focus), and whether the lens already moves in live view.
 - What the `0xC001` event parameter is, and what `0xD222` counts.
 - Why one init with the accepted prefix was rejected once.
 - Camera settings (ISO, aperture, film simulation, exposure compensation), movies, thumbnails.

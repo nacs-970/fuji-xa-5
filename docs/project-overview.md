@@ -76,8 +76,7 @@ The repo uses git. Rules are in [AGENTS.md](../AGENTS.md#version-control-use-git
 
 ## Road map
 
-1. **Shutter**: done (`shoot` stage of `fuji_remote_probe.py`). Still open: does the camera focus before the
-   shot? The black screen is the camera's state during any Wi-Fi remote session, not an effect of the shutter (confirmed 2026-10-05).
+1. **Shutter**: done (`shoot` stage of `fuji_remote_probe.py`). The camera focuses by itself on the shutter command (run 12 gave a sharp picture). Still open: focus control from the PC. The black screen is the camera's state during any Wi-Fi remote session, not an effect of the shutter (confirmed 2026-10-05).
 2. **Image transfer**: done for one picture. Still open: why the camera hides the third (black) picture (handle 3 answers `0x2007`), thumbnail and list views.
 3. **libgphoto2 patch**: fixed GUID prefix and no second init after the ack. Test with
    `gphoto2 --camera "Fuji X (WLAN)" --port ptpip:192.168.0.1 --capture-preview`. Offer it upstream
