@@ -6,8 +6,11 @@ The fake camera is built from public notes and our logs, so passing proves our s
 that the real camera agrees. One test, one fake process.
 """
 import os
+import socket
 import subprocess
 import sys
+import threading
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "src"))
@@ -49,6 +52,46 @@ def test_live_shoot_download():
         fake.wait()
 
 
+def fetch(port, path, frames=0):
+    """GET a path from the local server (retrying while it starts). With frames, stop after that many stream parts."""
+    for _ in range(100):
+        try:
+            s = socket.create_connection(("127.0.0.1", port), timeout=5)
+            break
+        except OSError:
+            time.sleep(0.1)
+    s.sendall(f"GET {path} HTTP/1.0\r\n\r\n".encode())
+    data = b""
+    while not frames or data.count(b"--frame") < frames:
+        chunk = s.recv(65536)
+        if not chunk:
+            break
+        data += chunk
+    s.close()
+    return data
+
+
+def test_serve():
+    fake = subprocess.Popen([sys.executable, os.path.join(HERE, "fake_camera", "fake_fuji_camera.py")],
+                            stdout=subprocess.PIPE, text=True)
+    try:
+        assert "listening" in fake.stdout.readline()
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        server = threading.Thread(target=main, args=(["--ip", "127.0.0.1", "serve", "--port", str(port), "--seconds", "4"],))
+        server.start()
+        stream = fetch(port, "/stream", frames=3)
+        assert b"multipart/x-mixed-replace" in stream and stream.count(b"image/jpeg") >= 3 and b"\xff\xd8" in stream
+        assert b'src="/stream"' in fetch(port, "/")
+        server.join(15)
+        assert not server.is_alive()   # --seconds ended the server and the camera session
+    finally:
+        fake.kill()
+        fake.wait()
+
+
 if __name__ == "__main__":
     test_live_shoot_download()
+    test_serve()
     print("ok")

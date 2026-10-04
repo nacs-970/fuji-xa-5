@@ -6,9 +6,68 @@ import argparse
 import logging
 import os
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import Camera, FujiError
+
+PAGE = (b'<!doctype html><meta charset="utf-8"><title>fuji-xa</title>'
+        b'<body style="margin:0;background:#000"><img src="/stream" style="width:100%">')
+
+
+def serve(cam, host, port, seconds=None):
+    """Live view as an MJPEG stream: open http://HOST:PORT/ in a browser. Runs until Ctrl-C or `seconds`.
+
+    ponytail: no login, and several viewers share the frames (each sees a part). Keep HOST on 127.0.0.1.
+    """
+    stop, failed = threading.Event(), []
+
+    def finish():
+        stop.set()
+        srv.shutdown()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            if self.path != "/stream":
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(PAGE)))
+                self.end_headers()
+                self.wfile.write(PAGE)
+                return
+            self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+            self.end_headers()
+            try:
+                while not stop.is_set():
+                    jpeg = cam.frame()
+                    self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n%s\r\n"
+                                     % (len(jpeg), jpeg))
+            except OSError:
+                pass   # the viewer left
+            except FujiError as exc:   # the camera stopped sending, or the session is ending
+                if not stop.is_set():
+                    failed.append(exc)
+                    threading.Thread(target=finish).start()
+
+        def log_message(self, *args):
+            pass
+
+    srv = ThreadingHTTPServer((host, port), Handler)
+    print(f"live view: http://{host}:{srv.server_address[1]}/  (Ctrl-C to stop)", flush=True)
+    if seconds:
+        timer = threading.Timer(seconds, finish)
+        timer.daemon = True
+        timer.start()
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        srv.server_close()
+    if failed:
+        raise failed[0]
 
 
 def main(argv=None):
@@ -22,6 +81,10 @@ def main(argv=None):
     p = sub.add_parser("preview", help="save one live-view frame (640x480 JPEG)")
     p.add_argument("-o", "--out", default="preview.jpg", help="file to write")
     p.add_argument("--seconds", type=float, default=1.0, help="read frames this long, keep the largest")
+    p = sub.add_parser("serve", help="live view as an MJPEG stream on a local port, open the address in a browser")
+    p.add_argument("--host", default="127.0.0.1", help="address to listen on (no login, keep it local)")
+    p.add_argument("--port", type=int, default=8080, help="port to listen on")
+    p.add_argument("--seconds", type=float, help="stop after this long (default: until Ctrl-C)")
     sub.add_parser("props", help="print the properties the camera reports, with current values (read-only, no photo)")
     p = sub.add_parser("set", help="write one camera setting and read it back (CHANGES CAMERA STATE). The X-A5 refused the F-number and shutter speed so far")
     p.add_argument("prop", type=lambda x: int(x, 0), help="property code from `props`, for example 0x5007")
@@ -48,6 +111,10 @@ def main(argv=None):
                 with open(a.out, "wb") as fh:
                     fh.write(best)
                 print(a.out)
+                return 0
+            if a.cmd == "serve":
+                cam.start_live()
+                serve(cam, a.host, a.port, a.seconds)
                 return 0
             if a.cmd == "props":
                 cam.start_live()   # the settings appear in the change list only after remote mode starts

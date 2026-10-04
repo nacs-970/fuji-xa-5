@@ -34,8 +34,10 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 24 | Test B: `shoot -n 3`, then the downloads (the owner said "b ready, ok") | `xa5-probe` | **Worked.** Three shots, handles 1 to 3 downloaded newest first: `DSCF8718` (7 473 797 bytes), `DSCF8717` (6 733 262), `DSCF8716` (6 680 414). All have JPEG start and end markers. Clean end. The owner saw the screen black until the shutter button was pressed |
 | 25 | Ending experiment `sockets`: live view 3 s, then close the three sockets with no `0x1018` and no CloseSession. No photo, no download | `xa5-probe` | Frame 11.5 KB. **The screen stayed black until the shutter button was pressed**, as after a clean end. So not sending CloseSession is not what brought the screen back in run 7 and run 23 |
 | 26 | Ending experiment 2: live view 2 s, image view (picture count 15, no download), then `0xDF01` = 5 again. No photo | `xa5-probe` | The camera answered `0x2001`, then closed the connection 3.1 s later (as in run 23). **The screen came back to live view by itself, but the shutter button and all other buttons did nothing except Q, the movie button and Fn. Switching the camera off and on fixed it** (owner report) |
+| 27 | `serve` (new, MJPEG on `127.0.0.1:8080`) through a scratch script: its own client read the stream for 5 s while the server ran 45 s. Live view only, no photo | `xa5-probe` | **Worked.** 83 frames in 5.0 s (16.6 fps), all valid JPEG, 10 580 to 13 061 bytes. The saved frame is a real 640x480 picture. The owner watched it in a browser: "very smooth". The low rate was not explained, because this run did not count frames at the camera (see run 28) |
+| 28 | `serve` for 60 s with a sample every 2 s: frames read from the camera, frames handed to viewers, CPU and RAM of our process. Browser connected. No photo | `xa5-probe` | **Worked.** The camera sent 59 to 60 fps and viewers got the same, except from about 14 s to 20 s: 24 to 27 fps, and 36 fps in one sample (camera and viewers equal, so the camera sent fewer; the owner did nothing at that time, cause not known). Our process used 1.7 to 2.1 % of one core at 60 fps and 0.7 % at 25 fps, and 28 to 29 MB of RAM (peak 29 MB, flat). Owner: "cpu + ram usage is normal". The owner also pressed the shutter button for autofocus and it did not work (when in the run is not recorded) |
 
-Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none.
+Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 and 28.
 
 ## What run 3 showed
 
@@ -169,6 +171,28 @@ Fn, until the owner switched it off and on. In runs 7 and 23 the owner did not s
 So the way out of a session stays the one from runs 12 to 15: press the shutter button once. The mode `terminate`
 (`0x1018` without CloseSession) in `end_test.py` was not run, because `sockets` already left the screen black. Not
 tested: any other ending. Do not use the `0xDF01` = 5 from image view as an ending: it needs a power cycle.
+
+## Local live-view stream (runs 27 and 28)
+
+`fuji-xa serve` starts live view and serves it as an MJPEG stream (`multipart/x-mixed-replace`) from the standard
+library's HTTP server: `/` is a page with the picture, `/stream` is the stream. Default `127.0.0.1:8080`, no login, so
+keep it local. Several viewers share the frames, each sees a part. If the camera stops sending, the server ends and
+the session closes. Fake-camera tested (`test_serve`).
+
+Run 28 on the real X-A5: the camera sends about 60 fps and the server passes them all on, with 1.7 to 2.1 % of one
+core and 28 to 29 MB of RAM. The browser does the decoding. For the browser the rest of the run only gave a snapshot of
+`ps`, whose CPU column is the average since each process started, so it cannot tell what the stream cost. A fair
+browser measurement would need two samples of the same processes a few seconds apart. Not done.
+
+Frame rate: from about 14 s to 20 s the camera itself sent only 24 to 27 fps. Run 27's 16.6 fps may be the same effect
+(the camera sending fewer frames), but run 27 did not count frames at the camera, so that is not shown. The owner did not cover the lens or
+change anything then. What makes the camera slow down (scene, exposure, Wi-Fi) is not known.
+
+Autofocus: the owner pressed the shutter button on the camera for autofocus during run 28 and it did not work.
+The only autofocus seen so far runs on the shutter command from the PC (run 13). `docs/protocol/wifi.md` section 6
+says a half-press wakes the black screen, so what the camera buttons do during a session is not settled: this run
+shows only that a press did not start autofocus. Whether the PC can start autofocus without taking a picture is not
+known.
 
 ## Camera settings (run 18)
 
