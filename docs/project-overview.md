@@ -46,7 +46,7 @@ The protocol is documented in [protocol/wifi.md](protocol/wifi.md).
 | libgphoto2 `Fuji X (WLAN)` driver | fails: random GUID, and a second init after the ack |
 | Settings (ISO, aperture, film simulation) | not started |
 | Native analysis with Ghidra/REA | not run, tools not installed ([plan 06](plans/06-ghidra-rea-native-analysis.md)) |
-| The official app's code (APK, jadx, `llvm-objdump`) | read ([finding](findings/2026-10-05-apk-analysis.md)): focus-point parameter, `0x902B`, vendor operation table (postview `0x9022`, zoom, step operations, movies; none tried). `0x9040` to `0x9042` are the firmware update: never send them |
+| The official app's code (APK, jadx, `llvm-objdump`) | read ([finding](findings/2026-10-05-apk-analysis.md)): focus-point parameter, `0x902B`, vendor operation table (postview `0x9022` works, runs 50 and 51, with `fuji-xa shoot --postview`; zoom, step operations and movies are not tried). `0x9040` to `0x9042` are the firmware update: never send them |
 
 The goal is not new. [libfuji](https://github.com/petabyt/libfuji) and its app Fudge already cover this
 protocol on other bodies. Nobody found names the X-A5. Our contribution is X-A5 evidence, a small clean

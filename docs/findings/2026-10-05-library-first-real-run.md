@@ -57,6 +57,11 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 47 | `fuji-xa -v serve --seconds 90` with the coloured square (white until focused, green, red; the square jumps at once on a click), property list read every 0.25 s. The owner said "ready, yes vendor" | `xa5-probe` | About 60 locks and releases, all answered `0x2001`, session ended normally. `0xD209` went 0 to 1 between 0.7 and 1.7 s after the lock was sent and back to 0 about 0.2 to 0.5 s after the release; a click let go within about 0.7 s never reached 1; **it was never 2**. The owner: **the square needed 1 to 2 s to turn green while the camera beeped after about 0.5 s**, and **in AF-C the lens did not keep refocusing while Space, the Focus button or the mouse was held and the camera was moved**. Not reported: red, a plain wall, the stutter. See "Green delay and AF-C" |
 | 48 | `fuji-xa -v serve --seconds 100` with the property list read every 0.1 s and the page sending `0x9026` again every second while Space, the Focus button or the mouse was held; raw log saved. The owner said "ready, yes vendor" | `xa5-probe` | 17 locks and 4 releases, **every `0x9026` and `0x9027` answered `0x2001`**; repeats took 0.00 s, or 1.2 to 2.1 s when the camera was already locked. **`0x1015` took 0.6 to 2.5 s to answer while the camera was focusing, and `0xD209` turned 1 in the same moment the slow read returned.** The owner: **the lens refocused when the camera moved**, green came sooner, but the preview stutters until the focus completes; no red. **The session ended by itself** about 5 s after the last release: no live-view frame for 5 s, the close timed out (`cleanup failed: timed out`), `fuji-xa: no live-view frame arrived`. The owner saw the **camera return to its normal live preview after it disconnected**. See "Green delay and AF-C" |
 | 49 | `fuji-xa -v serve --seconds 120` with the repeat every 2 s by default and `?every=1` and `?every=3` in the page address; raw log saved. The owner said "ready, yes vendor" | `xa5-probe` | 23 holds, every `0x9026` and `0x9027` answered `0x2001`, **the session ended normally** (`0x1018`, `0x1003`), and the run-48 drop did not come back. `0xD209` turned 1 within 0.48 to 0.67 s of the lock in 4 holds, after 0.9 to 5.4 s in 11, and 8 holds were let go before it turned green; 54 of 461 property reads took over 0.3 s (up to 2.5 s). The owner: **`?every=1` updates the focus fastest and `?every=3` slowest; green is closer to the camera's beep than before; the camera screen is black after the session, as after every normal one**; no red. See "Green delay and AF-C" |
+| 50 | Scratch script `postview_try.py`: live view, vendor operation `0x9022` (the app's GetPostview, no parameters) once before any shot, one shot, then `0x9022` twice. The owner said "ready, yes vendor, yes shoot" | `xa5-probe` | Before the shot `0x9022` answered `0x2001` with **0 bytes**. The shot took 2.9 s to `CaptureComplete`. The first `0x9022` after it answered `0x2001` with **42 751 bytes, a 640 x 480 JPEG, in 0.04 s**: the picture just taken, with black bars top and bottom like the live view (3:2 in 4:3). The second one answered `0x2001` with 0 bytes. **One photo on the SD card, not downloaded.** See "Postview" |
+| 51 | `fuji-xa -v shoot --postview -n 1 -d <folder>`: one shot, `Camera.postview()` right after it, then the usual download. The owner said "ready, yes vendor, yes shoot" | `xa5-probe` | `0x9022` answered `0x2001` with **42 331 bytes in 0.03 s**, saved as `postview_1.jpg` (640 x 480 JPEG). Then live view ended and **the download worked as before**: `DSCF8724.JPG`, 7.2 MB, 6000 x 4000, 8 reads of 0.06 to 0.34 s (about 1.8 s), `FocusWarning` Good, `FocusPixel` 2983 1983. **The postview is the same picture as the download**, seen side by side. The session ended normally. One photo on the card, with a copy. See "Postview" |
+| 52 | `fuji-xa -v shoot --postview -n 3 -d <folder>`: three shots with a postview read after each, then the download of all three. The owner said "ready, yes vendor, yes shoot" and moved the camera a little between shots | `xa5-probe` | Every `0x9022` answered `0x2001` with a JPEG: 40 269, 40 032 and 48 223 bytes, in 0.01 to 0.03 s. Shots 2 and 3 each answered `0x2019` (busy) once and then `0x2001` after the 0.5 s retry, as in earlier runs. The download then fetched all three (handles 1 to 3, newest first: `DSCF8727`, `DSCF8726`, `DSCF8725`, 7.3 to 7.8 MB, 6000 x 4000). **Each postview is the picture of its own shot**, compared side by side in order. `FocusWarning`: Good, Out of focus, Good (no focus lock sent). The session ended normally. Three photos on the card, with copies. See "Postview" |
+| 53 | Scratch script `lvsize_try.py`: live view, then `GetDevicePropValue` (`0x1015`) of `0xD174` (live view size in libgphoto2) and `0xD173` (live view quality), with a write of `0xD174` planned only if the read worked. No photo. The owner said "ready, yes vendor" | `xa5-probe` | **Both reads answered `0x200A`, property not supported**, so nothing was written. Live frames: 640 x 480, 91 in 1.5 s. The session ended normally. See "Postview" |
+| 54 | `fuji-xa -v shoot --postview -n 2 --no-download -d <folder>`: shot, postview, shot, postview, end, no download. The owner said "ready, yes vendor, yes shoot" | `xa5-probe` | Both `0x9022` answered `0x2001` with a 640 x 480 JPEG (18 496 and 18 498 bytes, 0.02 and 0.01 s; small because the scene was a plain wall and a corner). **The second shot answered `0x2001` at once, no `0x2019` busy answer**, because the postview read had run in between. The session ended normally (`0x1018`, `0x1003`), live view only, no image view. Two photos on the card, **not downloaded** (the owner can fetch them with `fuji-xa download`). See "Postview" |
 
 Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 to 35. Runs 36 and 37 took one each. Run 38 took none, run 39 one and runs 40 to 46 none.
 
@@ -463,6 +468,37 @@ Run 49 (the page repeats every 2 s, `?every=1` and `?every=3` tried in one sessi
   live preview. That fits the idea that our close (`0x1018`, `0x1003`) leaves the black screen, but it is two sessions.
   Still not tried on purpose.
 - Red was not seen again.
+
+## Postview (run 50)
+
+**`0x9022` returns the picture just taken, small and at once.** Sent with no parameters after a shot, it answered `0x2001` with
+a JPEG of 640 x 480 (42 751 bytes) in 0.04 s, against 1.2 s for the 6 MB file through the download path. I looked at it: it is
+the scene the shot was aimed at, with black bars at the top and bottom (the 3:2 picture inside a 4:3 frame, like the live
+view). The picture was out of focus because no focus lock was sent before the shot.
+- **It can be read once.** The second call, a moment later, answered `0x2001` with no data. Before any shot the answer was
+  also `0x2001` with no data. So a client has to call it right after each shot and keep the bytes.
+- Only tried right after `CaptureComplete`. Not known: whether it works earlier (right after `InitiateCapture`), and how long
+  after the shot the picture stays available.
+- It uses no download, so it does not switch the camera to image view (the step that cannot be undone in a session).
+  Downloading afterwards was not tried in this run.
+- The shot left one picture on the SD card.
+- **Run 51 put it in the library and the command line** (`Camera.postview()`, `fuji-xa shoot --postview`). One shot, the
+  postview (42 331 bytes, 0.03 s), then the download in the same session: the download still worked and the postview was
+  the same picture, checked side by side with the 6000 x 4000 file shrunk to the same size. So a client can show the shot
+  within a fraction of a second and fetch the full file later. This run did not put the postview on the `serve` page.
+- **Run 52: three shots in a row.** A postview after each of three shots, all answered, each matching its own shot. A
+  quick second or third shot still answers busy first (`0x2019`), and the postview was read only after the shot's
+  `CaptureComplete`, so the busy answer did not touch it. Then all three downloaded (handle 1 is the newest, so the file
+  names come in reverse shot order). Not tried: the postview of a shot taken while the previous one is still being written.
+- **Run 54: shot, postview, shot, postview, end.** Both postviews came back, the second shot was not answered busy this time
+  (in runs 50 to 52 shots 2 and 3 were), and the session ended without a download. Whether the postview read in between
+  is what avoids the busy answer, or the pause it adds, was not isolated: one run.
+- **Can the postview size be changed? Not known.** `0x9022` takes no parameter, and the official app has no setting for it
+  (its receive buffer is a fixed 12 MB). The postview has the live view's size, 640 x 480 with bars. libgphoto2 lists a
+  16-bit property `0xD174`, "live view size", with 1 = XGA, 2 = VGA and 3 = QVGA, for USB cameras (X-T3). It is not in the
+  X-A5's change list. **Run 53 read `0xD174` and `0xD173` on the X-A5: both answered `0x200A` (not supported).** So there
+  is no known way to change the postview size. It stays 640 x 480. A larger picture quickly would mean the download (6 to
+  8 MB in about 2 s). The thumbnail operation `0x100A` was not tried.
 
 ## Camera settings (run 18)
 

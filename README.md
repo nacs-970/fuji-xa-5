@@ -29,8 +29,8 @@ the evidence layout.
 - **The official app's code was read** (APK from the owner's phone, jadx and `llvm-objdump`, nothing sent to the camera,
   [finding](docs/findings/2026-10-05-apk-analysis.md)). It gave the focus-point parameter, the property descriptions
   (`0x902B`), and a table of the app's vendor operations in the [protocol notes](docs/protocol/wifi.md) section 6: postview
-  (`0x9022`, the shot without downloading it), zoom, the step operations for shutter speed, F-number and exposure bias,
-  and movies, none of them tried yet. It also showed that `0x9040`, `0x9041` and `0x9042` are the **firmware update**
+  (`0x9022`: it returns the shot as a 640 x 480 JPEG in 0.04 s, then the download still works, runs 50 and 51; `fuji-xa shoot --postview` saves it), zoom, the step operations for shutter speed,
+  F-number and exposure bias, and movies, which are not tried yet. It also showed that `0x9040`, `0x9041` and `0x9042` are the **firmware update**
   operations: never send them ([AGENTS.md](AGENTS.md)). Our start already matches the app's version handshake.
 - The protocol is written down in [docs/protocol/wifi.md](docs/protocol/wifi.md) (clean-room, with a status on
   every fact).

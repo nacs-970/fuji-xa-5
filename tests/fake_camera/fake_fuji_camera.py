@@ -116,6 +116,7 @@ def handle(c):
             state["busy_until"] = time.time() + 1.0
             if state["capture_open"]:
                 state["objects"] += 1
+                state["postview"] = True
                 if state["events"]:
                     threading.Thread(target=announce_shot, args=(state["events"],), daemon=True).start()
             c.sendall(container(3, 0x2001, tid))
@@ -144,6 +145,9 @@ def handle(c):
                 state["client_state"] = struct.unpack_from("<H", dbody, 8)[0]
                 state["view"] = state["client_state"] == 11
             c.sendall(container(3, 0x2001, tid))
+        elif code == 0x9022:   # postview: the picture just taken, once per shot, no data before a shot (run 50)
+            data = b"\xff\xd8\xff\xe0" + bytes(300) + b"\xff\xd9" if state.pop("postview", False) else b""
+            c.sendall((container(2, code, tid, data) if data else b"") + container(3, 0x2001, tid))
         elif code in (0x9026, 0x9027):   # the X-A5 answered 0x2001 to both with no parameters (runs 38 to 40)
             if code == 0x9026:
                 time.sleep(0.3)   # the X-A5 took about 0.9 s to answer the lock (run 41, from log timestamps)

@@ -278,6 +278,13 @@ class Camera:
         log.warning("shutter accepted, but no CaptureComplete event within %.0f s", timeout)
         return False
 
+    def postview(self):
+        """The picture just taken as a small JPEG (640 x 480 with black bars, about 42 KB, answered in 0.04 s on the X-A5, run 50),
+        or b"" if the camera has none. The camera gives it once per shot: call it right after `shoot()` and keep the bytes.
+        It needs no download, so live view stays open. Operation 0x9022, the official app's GetPostview."""
+        rcode, data = self.op(0x9022, ok=None)
+        return data if rcode == OK else b""
+
     def focus(self, cell=None):
         """Hold the half press: the camera runs autofocus and the lens moves (runs 38 to 40). The focus stays after
         `release_focus()`. CHANGES CAMERA STATE.

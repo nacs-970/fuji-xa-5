@@ -214,6 +214,7 @@ def main(argv=None):
     p.add_argument("-n", "--count", type=int, default=1, help="how many shots; all are taken before any download")
     p.add_argument("-d", "--dir", default=".", help="folder for the pictures")
     p.add_argument("--no-download", action="store_true", help="only release the shutter")
+    p.add_argument("--postview", action="store_true", help="also save the small picture the camera gives right after each shot (postview_N.jpg, 640x480, worked on the X-A5, run 50)")
     p = sub.add_parser("download", help="download a picture from the card")
     p.add_argument("-d", "--dir", default=".", help="folder for the pictures")
     p.add_argument("--handle", type=int, default=1, help="1 is the newest picture, 2 the next older")
@@ -259,8 +260,14 @@ def main(argv=None):
                 print(f"after: list {cam.props[a.prop]:#x}, read {(r := read())[0]:#06x} {r[1].hex()}")
                 return 0 if rcode == 0x2001 else 1
             if a.cmd == "shoot":
-                for _ in range(a.count):
+                os.makedirs(a.dir, exist_ok=True)
+                for n in range(1, a.count + 1):
                     cam.shoot()
+                    if a.postview and (view := cam.postview()):
+                        path = os.path.join(a.dir, f"postview_{n}.jpg")
+                        with open(path, "wb") as fh:
+                            fh.write(view)
+                        print(path)
                 if a.no_download:
                     print(f"shutter released {a.count} time(s)")
                     return 0

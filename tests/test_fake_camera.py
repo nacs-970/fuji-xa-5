@@ -35,7 +35,9 @@ def test_live_shoot_download():
             cam.start_live()
             jpeg = cam.frame()
             assert jpeg[:2] == b"\xff\xd8" and jpeg[-2:] == b"\xff\xd9"
+            assert cam.postview() == b""         # no shot yet: the camera answers with no data (run 50)
             assert cam.shoot() is True
+            assert cam.postview()[:2] == b"\xff\xd8" and cam.postview() == b""   # the shot as a small JPEG, once
             assert cam.shoot() is True           # right after the first: the fake answers Device Busy once
             name, data = cam.download()          # ends live view first
             assert name == "DSCF0001.JPG" and data == FAKE_JPEG
@@ -57,6 +59,10 @@ def test_live_shoot_download():
         with contextlib.redirect_stdout(out):
             assert main(["--ip", "127.0.0.1", "props"]) == 0
         assert "focus point: column 7 of 13, row 4 of 7" in out.getvalue()   # 0xD17C = 0x03020704
+        with tempfile.TemporaryDirectory() as tmp:   # one shot with its postview, then the download
+            assert main(["--ip", "127.0.0.1", "shoot", "--postview", "-d", tmp]) == 0
+            assert open(os.path.join(tmp, "postview_1.jpg"), "rb").read()[:2] == b"\xff\xd8"
+            assert open(os.path.join(tmp, "DSCF0001.JPG"), "rb").read() == FAKE_JPEG
     finally:
         fake.kill()
         fake.wait()
