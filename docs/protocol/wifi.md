@@ -154,8 +154,12 @@ its length field. The first three parameters:
 The first parameter is not the handle to download (see section 8). The picture is written to the SD card, and
 the camera makes its shutter sound.
 
-The camera screen goes black after the shot and wakes on a half-press of the shutter button. HIGH PERFORMANCE
-off does not change this (owner report). The cause is not known.
+The camera screen is black while the session is open, with the LED blinking. The owner saw this after shots
+with and without a download, and also when the connection started, before any shot (owner reports
+2026-10-04 and 2026-10-05). A half-press wakes it. HIGH PERFORMANCE off does not change this. A 30 s run with
+live view only (no shot, no download) showed the same: black with the LED blinking from the start of the
+connection to its end. So it is the camera's state during a Wi-Fi remote session, not an effect of the
+shutter or of a download (observed 2026-10-05).
 
 ## 7. Ending a session
 
@@ -178,6 +182,10 @@ Remote mode does not expose the picture list. Switch the same session to image v
 
 All observed to work, including the switch from remote mode to image view in one session.
 
+**Image view is one way (observed 2026-10-05).** Going back from image view to remote mode in the same session
+failed: setting `0xDF01` = 5 was accepted after about 3 s, and then the camera closed the control connection.
+Take all shots first, then download.
+
 **Handles (observed).** Handles start at 1 and **handle 1 is the newest picture**, handle 2 the next older, and
 so on up to the count. Handle 3 answered `0x2007` when the count was 2.
 `GetNumObjects` (`0x1006`) returned 0 every time and is not usable.
@@ -197,7 +205,6 @@ Speed: about 5 MB/s. A 6 to 7 MB full-size JPEG took 1.2 to 1.4 s.
 - Whether the camera focuses before the shot, and how to control focus.
 - What the `0xC001` event parameter is, and what `0xD222` counts.
 - Why one init with the accepted prefix was rejected once.
-- Why the camera screen goes black after a shot.
 - Camera settings (ISO, aperture, film simulation, exposure compensation), movies, thumbnails.
 - Whether other X-A bodies behave the same.
 - Whether `0xDF24` = `0x2000C` and `0xD227` are needed on the X-A5 (we always sent them).

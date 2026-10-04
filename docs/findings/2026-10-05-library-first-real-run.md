@@ -14,6 +14,8 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 4 | `preview`; the owner had been asked to press "change" first | `fuji-xa` | Init Fail `0x201D` 4 times. The run was cut short by the owner, who then asked whether OK must be pressed first. What was pressed is not recorded |
 | 5 | `preview`, 60 s retry after a refusal; the owner pressed "change" (to let any device connect), then OK to confirm the transfer | `fuji-xa` | **Worked on the first init, no refusal.** Live view and clean end as in run 3 |
 | 6 | `shoot -d /tmp` (the owner said yes to one photo) | `fuji-xa` | **Worked.** One shutter release, then the newest picture downloaded: `DSCF8707.JPG`, 6000x4000 JPEG, 4 988 909 bytes, in 5 chunks. Exit status 0 |
+| 7 | three shots in one session (shot 1 + download, shot 2 + download, shot 3 only), to test the black-screen theory | `fuji-xa` | Shot 1 and its download worked (`DSCF8708.JPG`, 6 852 340 bytes). Going back to live view for shot 2 failed: `0xDF01` = 5 was accepted after about 3 s, then the camera closed the control connection. Shots 2 and 3 were not taken |
+| 8 | `preview --seconds 30`, live view only, no shutter, to test the black-screen theory | `fuji-xa` | **Worked.** 30 s of live view, clean end, no photo taken. The owner saw the screen black with the LED blinking from the moment the connection started until the end |
 
 Runs 1 and 2 changed nothing on the camera or the SD card.
 
@@ -40,6 +42,22 @@ Runs 1 and 2 changed nothing on the camera or the SD card.
 - Handle 1 was the new picture, as before. The picture is a blurred close-up, so the camera is probably not
   focusing before the shot. That is still not known.
 - Not checked in this run: the shutter sound and the camera screen afterwards (asked of the owner).
+
+## What run 7 showed (three-shot test, black screen)
+
+- **Image view is one way in a session.** After a download, setting remote mode (`0xDF01` = 5) again was
+  accepted, and then the camera closed the connection at the next read. The library now refuses
+  `start_live()` after a download. A second shot after a download needs a new session. Not tested: whether
+  the camera still accepts a new init right after that (it leaves wireless mode when a session ends).
+- **Black screen.** The owner reported that the screen was black with the LED blinking during the 10 s after
+  shot 1 and its download, with the session still open. After the failed run the camera showed its normal
+  live view. Earlier (2026-10-04) the screen also went black when the connection started, before any shot,
+  and after shots without a download. So the screen is probably black for the whole Wi-Fi session and the
+  shutter and the download are not the cause.
+- **Run 8 confirmed it.** With live view only, no shot and no download, the screen was black with the LED
+  blinking from the start of the connection to its end. So the black screen is the camera's state during a Wi-Fi
+  remote session. It is not a fault and not caused by our code. It needs no fix, and the library cannot change it.
+  A user must know that the camera screen shows nothing while remote control runs.
 
 ## Client name
 
