@@ -61,7 +61,7 @@ client and a path into libgphoto2. See the [prior art survey](findings/2026-10-0
 | `scripts/` | probe tools and the Wi-Fi wrapper |
 | `tests/fake_camera/` | fake camera used to test scripts without hardware |
 | `captures/`, `artifacts/` | raw evidence and downloaded tools, git-ignored |
-| `src/fuji_xa/` | Python library and `fuji-xa` command (plan 07). `preview` ran on the real camera, `shoot` and `download` not yet |
+| `src/fuji_xa/` | Python library and `fuji-xa` command (plan 07). `preview`, `shoot` and `download` ran on the real camera |
 
 ## Version control
 

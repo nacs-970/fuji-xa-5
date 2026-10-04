@@ -64,7 +64,7 @@ docs/
 scripts/                       probe tools written for the plans (own code); `with_camera_wifi.sh` runs one command per fresh Wi-Fi join
 captures/                      raw logs and pcap files, git-ignored (see captures/README.md)
 artifacts/                     APKs, firmware, decompiler output, git-ignored (see artifacts/README.md)
-src/fuji_xa/                   Python library and `fuji-xa` command (preview, shoot, download). Fake-camera tested. `preview` ran on the real camera ([finding](docs/findings/2026-10-05-library-first-real-run.md)); `shoot` and `download` not yet
+src/fuji_xa/                   Python library and `fuji-xa` command (preview, shoot, download). Fake-camera tested. `preview`, `shoot` and `download` ran on the real camera ([finding](docs/findings/2026-10-05-library-first-real-run.md))
 tests/                         fake camera test double (`tests/fake_camera/`) and `tests/test_fake_camera.py`; pcap replay comes with plan 07
 ```
 

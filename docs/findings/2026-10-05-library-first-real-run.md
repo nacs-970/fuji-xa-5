@@ -13,6 +13,7 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 3 | `preview` | `xa5-probe` | **Worked.** Session, remote mode, live view, clean end. Saved a 640x480 JPEG of 11 032 bytes (a blurred close-up, as in the earlier probe runs) |
 | 4 | `preview`; the owner had been asked to press "change" first | `fuji-xa` | Init Fail `0x201D` 4 times. The run was cut short by the owner, who then asked whether OK must be pressed first. What was pressed is not recorded |
 | 5 | `preview`, 60 s retry after a refusal; the owner pressed "change" (to let any device connect), then OK to confirm the transfer | `fuji-xa` | **Worked on the first init, no refusal.** Live view and clean end as in run 3 |
+| 6 | `shoot -d /tmp` (the owner said yes to one photo) | `fuji-xa` | **Worked.** One shutter release, then the newest picture downloaded: `DSCF8707.JPG`, 6000x4000 JPEG, 4 988 909 bytes, in 5 chunks. Exit status 0 |
 
 Runs 1 and 2 changed nothing on the camera or the SD card.
 
@@ -27,6 +28,18 @@ Runs 1 and 2 changed nothing on the camera or the SD card.
   (a difference of `0x280`, about the `0x281` seen before).
 - The frame came from the background reader thread. Not tested yet: the shutter and download through the
   library on the real camera.
+
+## What run 6 showed (shoot and download through the library)
+
+- Sequence: the run 3 prelude, `0x100E` (0, 0) answered `0x2001`, six `0xD212` polls while waiting for the
+  event, `0x1018` (11), image-view setup, `0x1008` for handle 1, `0x101B` in chunks, `0x1003`.
+- `shoot()` printed no warning, so the `0x400D` CaptureComplete event arrived within 15 s. The log does not
+  print the event itself, so this is inferred from the missing warning.
+- `0xD229` (frames remaining) went from `0x8FE` to `0x8FD` during the wait. After the switch to image view
+  `0xD222` read 4, one more than before the shot. The file name `DSCF8707` follows the earlier `DSCF8706`.
+- Handle 1 was the new picture, as before. The picture is a blurred close-up, so the camera is probably not
+  focusing before the shot. That is still not known.
+- Not checked in this run: the shutter sound and the camera screen afterwards (asked of the owner).
 
 ## Client name
 
