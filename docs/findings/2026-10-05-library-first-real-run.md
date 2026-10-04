@@ -30,8 +30,12 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 20 | `props` after the owner set 1/500 (dial on M). No photo | `fuji-xa` | **Worked**, clean end. `0xD240` = `0x8007A120` (low part 500000). The other settings were unchanged from run 19 |
 | 21 | `set 0x5007 0x118` (F-number f/2.8, 2 bytes), the first write of a setting. The owner had set f/1.7 and said "yes write". No photo | `fuji-xa` | The camera answered **`0x200F`** (Access Denied) and nothing changed: the list still read `0xAA`. The direct read `GetDevicePropValue` of `0x5007` answered `0x2001` with 2 bytes `18 f0` (`0xF018`) before and after, which does not match the list value `0xAA`. Clean end, exit status 1 (the library reports a refused write) |
 | 22 | `set 0xd240 0x8007a120 --size 4` (shutter speed 1/500, set over 1/100, dial on M). The owner said "ready, yes write". No photo | `fuji-xa` | The camera answered **`0x2007`** and nothing changed (the list still read `0x800186A0`). The direct read answered `0x2001` with 4 bytes `ff 18 f0 9f` before and after. Clean end, exit status 1 |
+| 23 | Test A, one session: `shoot`, `download`, `shoot`, `download`, `shoot` (scratch script with our guard switched off after the first download). The owner asked for the test with up to 3 photos and said "ready" | `xa5-probe` | Shot 1 (complete event at 5.4 s) and download 1 worked (`DSCF8715.JPG`, 6 360 441 bytes). Shot 2: `0xDF01` = 5 answered `0x2001`, then the camera closed the connection about 3 s later. One photo taken, cleanup could not run. Two earlier attempts the same day were rejected, see "Client name". The owner saw the screen back to live view by itself (buttons not checked) |
+| 24 | Test B: `shoot -n 3`, then the downloads (the owner said "b ready, ok") | `xa5-probe` | **Worked.** Three shots, handles 1 to 3 downloaded newest first: `DSCF8718` (7 473 797 bytes), `DSCF8717` (6 733 262), `DSCF8716` (6 680 414). All have JPEG start and end markers. Clean end. The owner saw the screen black until the shutter button was pressed |
+| 25 | Ending experiment `sockets`: live view 3 s, then close the three sockets with no `0x1018` and no CloseSession. No photo, no download | `xa5-probe` | Frame 11.5 KB. **The screen stayed black until the shutter button was pressed**, as after a clean end. So not sending CloseSession is not what brought the screen back in run 7 and run 23 |
+| 26 | Ending experiment 2: live view 2 s, image view (picture count 15, no download), then `0xDF01` = 5 again. No photo | `xa5-probe` | The camera answered `0x2001`, then closed the connection 3.1 s later (as in run 23). **The screen came back to live view by itself, but the shutter button and all other buttons did nothing except Q, the movie button and Fn. Switching the camera off and on fixed it** (owner report) |
 
-Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test.
+Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none.
 
 ## What run 3 showed
 
@@ -148,6 +152,24 @@ memory for access and does not go back to the shooting mode by itself. So a remo
 camera in a state that the user ends on the camera. This fits runs 12 to 17 and is not proven. Decision: do not try
 to work around it. Document it, press the shutter button once after a session.
 
+## Download order and other endings (runs 23 to 26)
+
+**Order.** Test A (run 23) repeated run 7 with a full trace in the scratch log: after the download, `0xDF01` = 5 was
+answered `0x2001`, and the camera closed the connection before it answered the next read, about 3 s later. So image
+view is one way in a session, now seen twice (runs 7 and 23). Test B (run 24) worked as in runs 10 and 11. Take all
+the shots first, then download.
+
+**Ending.** Idea: the black screen after a session might come from our clean ending, because in runs 7 and 23 the camera
+dropped the connection itself (no `0x1018`, no CloseSession from us) and the screen came back to live view. Run 25 closed
+all sockets without `0x1018` and CloseSession: the screen still stayed black until the shutter button. So that idea is
+wrong. Run 26 repeated the camera's own drop without a shot or a download (image view, then `0xDF01` = 5). The screen
+came back by itself, but the camera was locked: shutter button and all other buttons dead except Q, the movie button and
+Fn, until the owner switched it off and on. In runs 7 and 23 the owner did not say whether the buttons worked.
+
+So the way out of a session stays the one from runs 12 to 15: press the shutter button once. The mode `terminate`
+(`0x1018` without CloseSession) in `end_test.py` was not run, because `sockets` already left the screen black. Not
+tested: any other ending. Do not use the `0xDF01` = 5 from image view as an ending: it needs a power cycle.
+
 ## Camera settings (run 18)
 
 The raw output is in `captures/wifi-gphoto2/2026-10-05-props.txt` (git-ignored). Before the run the owner read these
@@ -245,6 +267,13 @@ Not known:
 
 The library's default name is `xa5-probe`. When refused, it now says the camera may expect its last name,
 or that the user should press "change".
+
+Runs 23 to 26 (later the same day): the first two attempts used the library default `xa5-probe`, but the camera's
+last registered name was `fuji-xa` (the name of runs 4 to 22, which were run with `--name fuji-xa`). They were rejected
+with `0x201D` three times, then `Connection refused` on the control port. The mistake was ours: we forgot `--name`,
+and first took it for another client that had registered a name. The next attempt with `xa5-probe` worked. What the
+owner pressed on the camera in between is not recorded (probably "change"). From then on the registered name should be
+`xa5-probe`, the library default. This fits the one-registered-name theory.
 
 ## Changes made because of this run
 

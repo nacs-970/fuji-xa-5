@@ -199,6 +199,11 @@ shutter button then did not work either, and the camera had to be switched off a
 The cause is not known. The owner's view is that it is camera behaviour: over USB the camera also only opens its
 memory and does not return to the shooting mode itself. Press the shutter button once after a session.
 
+Other endings were tried (runs 25 and 26, 2026-10-05). Closing the sockets without `TerminateOpenCapture` and
+CloseSession leaves the same black screen. Setting remote mode again from image view makes the camera close the
+connection itself and the screen returns to live view, but the shutter button and most other buttons stay dead until
+the camera is switched off and on. Neither is a way out. Do not use the second one.
+
 ## 8. Reading pictures
 
 Remote mode does not expose the picture list. Switch the same session to image view:
@@ -215,8 +220,9 @@ Remote mode does not expose the picture list. Switch the same session to image v
 All observed to work, including the switch from remote mode to image view in one session.
 
 **Image view is one way (observed 2026-10-05).** Going back from image view to remote mode in the same session
-failed: setting `0xDF01` = 5 was accepted after about 3 s, and then the camera closed the control connection.
-Take all shots first, then download.
+failed: setting `0xDF01` = 5 was accepted after about 3 s, and then the camera closed the control connection
+(runs 7 and 23; run 26 did the same after image view without a download). Take all shots first, then download.
+Shots, shots, shots, then downloads works (run 24).
 
 **Handles (observed).** Handles start at 1 and **handle 1 is the newest picture**, handle 2 the next older, and
 so on up to the count. Handle 3 answered `0x2007` when the count was 2. After three new shots, handles 1, 2 and 3 were those three
