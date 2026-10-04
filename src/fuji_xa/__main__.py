@@ -23,6 +23,10 @@ def main(argv=None):
     p.add_argument("-o", "--out", default="preview.jpg", help="file to write")
     p.add_argument("--seconds", type=float, default=1.0, help="read frames this long, keep the largest")
     sub.add_parser("props", help="print the properties the camera reports, with current values (read-only, no photo)")
+    p = sub.add_parser("set", help="write one camera setting and read it back (CHANGES CAMERA STATE). The X-A5 refused the F-number and shutter speed so far")
+    p.add_argument("prop", type=lambda x: int(x, 0), help="property code from `props`, for example 0x5007")
+    p.add_argument("value", type=lambda x: int(x, 0), help="new value, for example 0x118 for f/2.8")
+    p.add_argument("--size", type=int, default=2, choices=(2, 4), help="bytes of the value")
     p = sub.add_parser("shoot", help="take photos (WRITES TO THE SD CARD), then download them")
     p.add_argument("-n", "--count", type=int, default=1, help="how many shots; all are taken before any download")
     p.add_argument("-d", "--dir", default=".", help="folder for the pictures")
@@ -51,6 +55,20 @@ def main(argv=None):
                 for prop in sorted(cam.props):   # GetDevicePropDesc is not served over Wi-Fi (2026-10-05), so values only
                     print(f"{prop:#06x} {cam.props[prop]:#x}")
                 return 0
+            if a.cmd == "set":
+                cam.start_live()
+                cam.events()
+                if a.prop not in cam.props or a.prop >> 8 == 0xDF:   # 0xDFxx is protocol state, not a setting
+                    raise FujiError(f"{a.prop:#06x} is not a setting the camera reported")
+                read = lambda: cam.op(0x1015, (a.prop,), ok=None)   # noqa: E731  GetDevicePropValue, may not be served
+                listed, direct = cam.props[a.prop], read()
+                rcode = cam.set_prop(a.prop, a.value, a.size, ok=None)
+                time.sleep(0.5)
+                cam.events()
+                print(f"{a.prop:#06x} before: list {listed:#x}, read {direct[0]:#06x} {direct[1].hex()}")
+                print(f"wrote {a.value:#x}, camera answered {rcode:#06x}")
+                print(f"after: list {cam.props[a.prop]:#x}, read {(r := read())[0]:#06x} {r[1].hex()}")
+                return 0 if rcode == 0x2001 else 1
             if a.cmd == "shoot":
                 for _ in range(a.count):
                     cam.shoot()

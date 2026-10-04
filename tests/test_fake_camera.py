@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "src"))
 sys.path.insert(0, os.path.join(HERE, "fake_camera"))
 from fake_fuji_camera import FAKE_JPEG  # noqa: E402
 from fuji_xa import Camera, FujiError  # noqa: E402
+from fuji_xa.__main__ import main  # noqa: E402
 
 
 def test_live_shoot_download():
@@ -37,6 +38,12 @@ def test_live_shoot_download():
                 pass
         with Camera("127.0.0.1") as cam:         # a second session that only downloads
             assert cam.download(2)[1] == FAKE_JPEG
+        assert main(["--ip", "127.0.0.1", "set", "0x5007", "0x118"]) == 0   # the `set` command, F-number to 2.8
+        assert main(["--ip", "127.0.0.1", "set", "0xdf01", "5"]) == 1      # protocol state is refused
+        with Camera("127.0.0.1") as cam:
+            cam.start_live()
+            cam.events()
+            assert cam.props[0x5007] == 0x118
     finally:
         fake.kill()
         fake.wait()

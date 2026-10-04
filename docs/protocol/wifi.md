@@ -100,11 +100,11 @@ Poll it as a substitute for events on the control connection.
 | `0xDF25` | remote get-object version | read 1. We set 5 before image view. Accepted |
 | `0xD222`, `0xD220`, `0xD401` | picture count (see section 8) | 0, 1, 2, 3 across our shots |
 | `0xD229` | picture counter, name from public notes ("capture remaining") | falls by one a few seconds after a shot. Starting values near `0xB81`. After InitiateOpenCapture it reads `0x281` lower |
-| `0x5007` | F-number | `0xAA` at f/1.7 and `0x168` (360) at f/3.6 (run 19): the value is the f-number times 100 |
+| `0x5007` | F-number | `0xAA` at f/1.7 and `0x168` (360) at f/3.6 (run 19): the value is the f-number times 100. A write of `0x118` (f/2.8, 2 bytes) answered `0x200F` and changed nothing (run 21). `GetDevicePropValue` returns `0xF018` for it, not `0xAA`: not understood |
 | `0x5005` | white balance | 2 while the owner's setting was auto |
 | `0xD001` | film simulation | `0xB` for Classic Chrome (run 18), 1 for Standard/Provia (run 19) |
 | `0xD02A` | ISO | `0x640` (1600) for ISO 1600 (run 18). `0x80000C80` for ISO Auto3 (run 19): the top bit may mean auto and the low part 3200 (`0xC80`) may be the auto limit or the chosen ISO. Not known which |
-| `0xD240` | shutter speed | `0x80030D40` for 1/200 (run 18), `0x8000EA60` for 1/60 (run 19) and `0x8007A120` for 1/500 (run 20, set by the owner). All fit: low part = denominator x 1000 (200000, 60000, 500000). In run 19 the owner had set 1/100 on the camera (dial on M) and the screen showed 1/60 after the session. Who changed it is not known. Three data points, fractions of a second only. The top bit was set in all three and is not understood. In run 20 the screen showed 1/500 before and after the session, so the session does not change the speed |
+| `0xD240` | shutter speed | `0x80030D40` for 1/200 (run 18), `0x8000EA60` for 1/60 (run 19) and `0x8007A120` for 1/500 (run 20, set by the owner). and `0x800186A0` for 1/100 (run 21, set by the owner). All fit: low part = denominator x 1000 (200000, 60000, 500000, 100000). In run 19 the owner had set 1/100 on the camera (dial on M) and the screen showed 1/60 after the session. Who changed it is not known. Four data points, fractions of a second only. The top bit was set in all three and is not understood. In run 20 the screen showed 1/500 before and after the session, so the session does not change the speed |
 | `0x500A` | focus mode (name from standard PTP) | `0x8001` with the owner's camera set to AF-S (run 18) and to AF-C (run 19). It does not tell them apart |
 | `0x500C` | flash mode | 2 while the built-in flash was closed (it must be popped up by hand on this camera). In standard PTP 2 is flash off |
 | `0x500E` | exposure mode | 1 with the mode dial on M in runs 18 and 19 (the owner first said auto, then corrected it). In standard PTP 1 is manual, which fits. One value only |
@@ -116,8 +116,9 @@ Set timeouts of 60 s.
 The settings rows above (`0x5007`, `0x5005`, `0xD001`, `0xD02A`, `0xD240`) come from the change list that
 `0xD212` returns after remote mode starts (run 18). Each was matched to one value the owner read on the camera
 screen (all but `0x5010`), so one data point each. `GetDevicePropDesc` (`0x1014`) does not give the allowed values over Wi-Fi: the
-standard properties answer `0x2007` and the Fuji ones `0x200A`. Whether `GetDevicePropValue` (`0x1015`) reads
-them directly is not tested. Setting any of them is not tested.
+standard properties answer `0x2007` and the Fuji ones `0x200A`. `GetDevicePropValue` (`0x1015`) answers `0x2001`
+for `0x5007` (run 21), but with a different number than the change list. Writing `0x5007` was refused with `0x200F` and writing `0xD240` (4 bytes) with `0x2007`, both with live view running
+and the dial on M (runs 21 and 22). Both left the value unchanged. Writing the other settings is not tested.
 
 Properties from the libgphoto2 capture sequence (`0xD207`, `0xD208`, `0x500D`) answer `0x200A` (not supported)
 on the X-A5. Do not use them.

@@ -19,7 +19,7 @@ GUID_PREFIX = bytes.fromhex("ada5485d87b27f0bd3d5ded0")  # the camera checks the
 HOST = "127.0.0.1"
 FAKE_JPEG = b"\xff\xd8\xff\xe0" + bytes(range(256)) * 4500 + b"\xff\xd9"   # about 1.1 MB, two chunks
 state = {"client_state": 2, "remote_ver": 0x20006, "capture_open": False, "objects": 3, "view": False,
-         "events": None, "servers": False, "busy_until": 0}
+         "events": None, "servers": False, "busy_until": 0, "fnumber": 0xAA}
 
 
 def listen(port):
@@ -122,13 +122,15 @@ def handle(c):
         elif code == 0x1015:
             prop = params[0]
             if prop == 0xD212:
-                evs = [(0xDF00, 6 if state["client_state"] in (5, 11) else 2)]
+                evs = [(0xDF00, 6 if state["client_state"] in (5, 11) else 2), (0x5007, state["fnumber"])]
                 if state["view"]:
                     evs.append((0xD222, state["objects"]))
                 payload = struct.pack("<H", len(evs)) + b"".join(struct.pack("<HI", a, b) for a, b in evs)
                 c.sendall(container(2, code, tid, payload) + container(3, 0x2001, tid))
             elif prop == 0xDF24:
                 c.sendall(container(2, code, tid, struct.pack("<I", state["remote_ver"])) + container(3, 0x2001, tid))
+            elif prop == 0x5007:
+                c.sendall(container(2, code, tid, struct.pack("<H", state["fnumber"])) + container(3, 0x2001, tid))
             elif prop in (0xDF21, 0xDF22, 0xDF25):
                 c.sendall(container(2, code, tid, struct.pack("<I", 4)) + container(3, 0x2001, tid))
             else:
@@ -136,6 +138,8 @@ def handle(c):
         elif code == 0x1016:
             dlen = struct.unpack("<I", recv_exact(c, 4))[0]
             dbody = recv_exact(c, dlen - 4)
+            if params[0] == 0x5007:
+                state["fnumber"] = int.from_bytes(dbody[8:], "little")
             if params[0] == 0xDF01:
                 state["client_state"] = struct.unpack_from("<H", dbody, 8)[0]
                 state["view"] = state["client_state"] == 11

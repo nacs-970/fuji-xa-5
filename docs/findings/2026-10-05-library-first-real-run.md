@@ -28,6 +28,8 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 18 | `props`, read-only: live view starts, then `GetDevicePropDesc` for each property in the change list. No photo | `fuji-xa` | **Worked**, clean end. Every `0x1014` failed (`0x2007` for the 8 standard properties, `0x200A` for the 20 Fuji ones), so no allowed values. The current values from the change list matched the owner's camera settings (see "Camera settings") |
 | 19 | `props` again after the owner changed settings on the camera: ISO Auto3, f/3.6, 1/100, AF-C, Standard/Provia. No photo | `fuji-xa` | **Worked**, clean end. `0x5007` = `0x168`, `0xD001` = 1, `0xD02A` = `0x80000C80`, `0xD240` = `0x8000EA60`. See "Settings run 19" |
 | 20 | `props` after the owner set 1/500 (dial on M). No photo | `fuji-xa` | **Worked**, clean end. `0xD240` = `0x8007A120` (low part 500000). The other settings were unchanged from run 19 |
+| 21 | `set 0x5007 0x118` (F-number f/2.8, 2 bytes), the first write of a setting. The owner had set f/1.7 and said "yes write". No photo | `fuji-xa` | The camera answered **`0x200F`** (Access Denied) and nothing changed: the list still read `0xAA`. The direct read `GetDevicePropValue` of `0x5007` answered `0x2001` with 2 bytes `18 f0` (`0xF018`) before and after, which does not match the list value `0xAA`. Clean end, exit status 1 (the library reports a refused write) |
+| 22 | `set 0xd240 0x8007a120 --size 4` (shutter speed 1/500, set over 1/100, dial on M). The owner said "ready, yes write". No photo | `fuji-xa` | The camera answered **`0x2007`** and nothing changed (the list still read `0x800186A0`). The direct read answered `0x2001` with 4 bytes `ff 18 f0 9f` before and after. Clean end, exit status 1 |
 
 Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test.
 
@@ -193,6 +195,34 @@ and 1/60 (60000) that makes three points, all with the top bit set. Aperture (`0
 
 The owner saw 1/500 on the screen before the run and after it. So the session does not change the shutter speed. Run 19's
 change from 1/100 to 1/60 is still unexplained (the speed may not have been 1/100 when the run started, or a wheel moved).
+
+## First write of a setting (run 21)
+
+The raw output is in `captures/wifi-gphoto2/2026-10-05-set-fnumber.txt` (git-ignored). `fuji-xa set 0x5007 0x118` wrote
+2 bytes to `SetDevicePropValue`. The camera answered `0x200F` (Access Denied in standard PTP). The value did not change.
+It was sent in remote mode with live view running, the dial on M, the aperture at f/1.7.
+
+- `GetDevicePropValue` on `0x5007` works (`0x2001`), unlike `GetDevicePropDesc`. It returned `0xF018` while the change
+  list said `0xAA`. The two are not the same number and the reason is not known.
+- The owner says the lens has no aperture ring, and the screen still showed f/1.7 after the run. So a ring does not
+  explain the refusal. Possible reasons, none tested: the aperture is set through another property, or the write
+  needs another state or size, or `0x5007` cannot be written at all.
+- The change list in this run read `0xD240` = `0x800186A0`. The owner confirms 1/100 was set, so 1/100 gives 100000: a
+  fourth point for "denominator x 1000".
+- Not tested: a write of any other setting (shutter speed `0xD240`, ISO `0xD02A`, film simulation `0xD001`).
+
+## Second write of a setting (run 22)
+
+The raw output is in `captures/wifi-gphoto2/2026-10-05-set-shutter.txt` (git-ignored). `fuji-xa set 0xd240 0x8007a120 --size 4`
+wrote 4 bytes. The camera answered `0x2007` and did not change the value. Two settings writes are now refused with
+different codes: `0x5007` with `0x200F` (run 21), `0xD240` with `0x2007` (run 22). In both runs live view was running and the dial was on M.
+
+- The direct reads of these properties give numbers that do not match the change list: `0x5007` read `18 f0`, `0xD240` read
+  `ff 18 f0 9f`. Both hold the bytes `18 f0`. This may be data that is not the setting's value. Not understood.
+- Not tested: writing before live view starts (right after remote mode), writing `0xD001` or `0xD02A`, a write in another
+  dial mode, a write of the value the camera already holds, and an 8-byte or other-size write.
+- Public notes (libfuji, `lib/fuji.c`, read through a summarising tool) did not show how it sets these settings, so there is
+  no reference to copy from yet.
 
 ## Client name
 
