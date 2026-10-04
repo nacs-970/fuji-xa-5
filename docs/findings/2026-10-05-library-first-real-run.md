@@ -26,6 +26,7 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 16 | `preview --seconds 5` with a new read-only `GetDevicePropValue` of `0xDF01` right after OpenSession and the version reads | `fuji-xa` | **Worked**, clean end, 11.7 KB frame. The read answered `0x2001`, 2 bytes: `0xDF01` = **16** (`0x10`) before we set it. Nothing was written back yet |
 | 17 | `preview --seconds 5` with a write of `0xDF01` = 16 (the value read in run 16) just before CloseSession, the owner agreed | `fuji-xa` | The camera accepted the write (`0x2001`) and CloseSession (`0x2001`), the frame was 11.7 KB. **Afterwards the screen stayed black and the shutter button did not bring it back: the owner had to switch the camera off and on.** The owner heard no "ready" sound but was not sure |
 | 18 | `props`, read-only: live view starts, then `GetDevicePropDesc` for each property in the change list. No photo | `fuji-xa` | **Worked**, clean end. Every `0x1014` failed (`0x2007` for the 8 standard properties, `0x200A` for the 20 Fuji ones), so no allowed values. The current values from the change list matched the owner's camera settings (see "Camera settings") |
+| 19 | `props` again after the owner changed settings on the camera: ISO Auto3, f/3.6, 1/100, AF-C, Standard/Provia. No photo | `fuji-xa` | **Worked**, clean end. `0x5007` = `0x168`, `0xD001` = 1, `0xD02A` = `0x80000C80`, `0xD240` = `0x8000EA60`. See "Settings run 19" |
 
 Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test.
 
@@ -151,12 +152,36 @@ settings on the camera: ISO 1600, 1/200 s, f/1.7, white balance auto, film simul
 list held `0xD02A` = `0x640` (1600), `0x5007` = `0xAA` (170, f/1.70), `0xD240` = `0x80030D40` (200000 in the low
 part, 1/200), `0x5005` = 2 and `0xD001` = `0xB`. So all five fit, with one data point each. The owner then added:
 focus mode AF-S (`0x500A` = `0x8001`), the built-in flash closed (`0x500C` = 2, flash off in standard PTP; this
-camera needs the flash popped up by hand), and exposure mode auto (`0x500E` = 1). The value 1 is manual in standard
-PTP, so this camera's numbering differs or the camera reports it in another way. The exposure compensation was not
+camera needs the flash popped up by hand), and exposure mode "auto" (`0x500E` = 1). The owner later corrected this: the dial was on M in runs 18 and 19. The
+value 1 is manual in standard PTP, so it fits. The exposure compensation was not
 given, so `0x5010` (= 0) is not matched. Nothing was written to the camera.
 
 Not tested: `GetDevicePropValue` on these properties, the allowed values (another source is needed, since
 `GetDevicePropDesc` is not served), and setting a value.
+
+## Settings run 19
+
+The raw output is in `captures/wifi-gphoto2/2026-10-05-props-2.txt` (git-ignored). Compared with run 18:
+
+| Property | Run 18 (owner's setting) | Run 19 (owner's setting) |
+|----------|--------------------------|--------------------------|
+| `0x5007` F-number | `0xAA` (f/1.7) | `0x168` = 360 (f/3.6). Fits f-number x 100 |
+| `0xD001` film simulation | `0xB` (Classic Chrome) | 1 (Standard/Provia) |
+| `0xD02A` ISO | `0x640` = 1600 (ISO 1600) | `0x80000C80` (ISO Auto3). Top bit set, low part 3200 |
+| `0xD240` shutter speed | `0x80030D40` (1/200) | `0x8000EA60` (1/100 set, 1/60 shown after the session). Low part 60000 |
+| `0x500A` focus mode | `0x8001` (AF-S) | `0x8001` (AF-C set). **Did not change** |
+| `0x5005`, `0x500C`, `0x500E`, `0x5010` | 2, 2, 1, 0 | 2, 2, 1, 0 (same) |
+
+- The f-number and film simulation values are clear.
+- ISO Auto3 sets the top bit. The low part 3200 may be the Auto3 limit or the ISO the camera chose. Not known.
+- The shutter speed: the owner had set 1/100 with the dial on M (not auto, the owner corrected an earlier statement).
+  After the run the owner pressed the shutter button to wake the camera and the screen showed 1/60. So 60000 is 1/60,
+  and run 18's 200000 was 1/200. Both fit: low part = denominator x 1000. Two data points, fractions of a second only.
+  The top bit is not understood, and slow speeds (above 1 s) are not tested. Why the speed was 1/60 and not the 1/100
+  the owner set, in M mode, is not known.
+- The focus mode value stayed `0x8001` although the owner set AF-C (confirmed by the owner). So `0x500A` does not tell
+  AF-S and AF-C apart: it is not the AF mode, or the camera reports one value for both in remote mode, or it changes
+  only in another state. Not known.
 
 ## Client name
 

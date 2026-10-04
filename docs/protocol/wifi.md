@@ -100,14 +100,14 @@ Poll it as a substitute for events on the control connection.
 | `0xDF25` | remote get-object version | read 1. We set 5 before image view. Accepted |
 | `0xD222`, `0xD220`, `0xD401` | picture count (see section 8) | 0, 1, 2, 3 across our shots |
 | `0xD229` | picture counter, name from public notes ("capture remaining") | falls by one a few seconds after a shot. Starting values near `0xB81`. After InitiateOpenCapture it reads `0x281` lower |
-| `0x5007` | F-number | `0xAA` while the owner's lens was at f/1.7 (so 170 means 1.70) |
+| `0x5007` | F-number | `0xAA` at f/1.7 and `0x168` (360) at f/3.6 (run 19): the value is the f-number times 100 |
 | `0x5005` | white balance | 2 while the owner's setting was auto |
-| `0xD001` | film simulation | `0xB` while the owner's setting was Classic Chrome |
-| `0xD02A` | ISO | `0x640` (1600) while the owner's setting was ISO 1600 |
-| `0xD240` | shutter speed | `0x80030D40` while the owner's setting was 1/200. The low part is 200000 = 200 x 1000, the meaning of the top bit is not known |
-| `0x500A` | focus mode | `0x8001` while the owner's setting was AF-S |
+| `0xD001` | film simulation | `0xB` for Classic Chrome (run 18), 1 for Standard/Provia (run 19) |
+| `0xD02A` | ISO | `0x640` (1600) for ISO 1600 (run 18). `0x80000C80` for ISO Auto3 (run 19): the top bit may mean auto and the low part 3200 (`0xC80`) may be the auto limit or the chosen ISO. Not known which |
+| `0xD240` | shutter speed | `0x80030D40` for 1/200 (run 18) and `0x8000EA60` for 1/60 (run 19). Both fit: low part = denominator x 1000 (200000, 60000). In run 19 the owner had set 1/100 on the camera (dial on M) and the screen showed 1/60 after the session. Who changed it is not known. Two data points, fractions of a second only. The top bit is not understood |
+| `0x500A` | focus mode (name from standard PTP) | `0x8001` with the owner's camera set to AF-S (run 18) and to AF-C (run 19). It does not tell them apart |
 | `0x500C` | flash mode | 2 while the built-in flash was closed (it must be popped up by hand on this camera). In standard PTP 2 is flash off |
-| `0x500E` | exposure mode | 1 while the owner's mode was auto. In standard PTP 1 is manual, so this camera does not follow that numbering, or reports it differently. Not known which |
+| `0x500E` | exposure mode | 1 with the mode dial on M in runs 18 and 19 (the owner first said auto, then corrected it). In standard PTP 1 is manual, which fits. One value only |
 | `0x5010` | exposure bias (name from standard PTP) | 0. The owner did not give the camera's setting |
 
 Setting `0xDF01` = 5 took between 0.3 s and 5.4 s. The camera may wait on its own screen for the user to confirm.
