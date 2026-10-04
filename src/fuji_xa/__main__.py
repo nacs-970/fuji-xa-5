@@ -22,6 +22,7 @@ def main(argv=None):
     p = sub.add_parser("preview", help="save one live-view frame (640x480 JPEG)")
     p.add_argument("-o", "--out", default="preview.jpg", help="file to write")
     p.add_argument("--seconds", type=float, default=1.0, help="read frames this long, keep the largest")
+    sub.add_parser("props", help="print the properties the camera reports, with current values (read-only, no photo)")
     p = sub.add_parser("shoot", help="take photos (WRITES TO THE SD CARD), then download them")
     p.add_argument("-n", "--count", type=int, default=1, help="how many shots; all are taken before any download")
     p.add_argument("-d", "--dir", default=".", help="folder for the pictures")
@@ -43,6 +44,12 @@ def main(argv=None):
                 with open(a.out, "wb") as fh:
                     fh.write(best)
                 print(a.out)
+                return 0
+            if a.cmd == "props":
+                cam.start_live()   # the settings appear in the change list only after remote mode starts
+                cam.events()
+                for prop in sorted(cam.props):   # GetDevicePropDesc is not served over Wi-Fi (2026-10-05), so values only
+                    print(f"{prop:#06x} {cam.props[prop]:#x}")
                 return 0
             if a.cmd == "shoot":
                 for _ in range(a.count):

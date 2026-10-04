@@ -100,9 +100,24 @@ Poll it as a substitute for events on the control connection.
 | `0xDF25` | remote get-object version | read 1. We set 5 before image view. Accepted |
 | `0xD222`, `0xD220`, `0xD401` | picture count (see section 8) | 0, 1, 2, 3 across our shots |
 | `0xD229` | picture counter, name from public notes ("capture remaining") | falls by one a few seconds after a shot. Starting values near `0xB81`. After InitiateOpenCapture it reads `0x281` lower |
+| `0x5007` | F-number | `0xAA` while the owner's lens was at f/1.7 (so 170 means 1.70) |
+| `0x5005` | white balance | 2 while the owner's setting was auto |
+| `0xD001` | film simulation | `0xB` while the owner's setting was Classic Chrome |
+| `0xD02A` | ISO | `0x640` (1600) while the owner's setting was ISO 1600 |
+| `0xD240` | shutter speed | `0x80030D40` while the owner's setting was 1/200. The low part is 200000 = 200 x 1000, the meaning of the top bit is not known |
+| `0x500A` | focus mode | `0x8001` while the owner's setting was AF-S |
+| `0x500C` | flash mode | 2 while the built-in flash was closed (it must be popped up by hand on this camera). In standard PTP 2 is flash off |
+| `0x500E` | exposure mode | 1 while the owner's mode was auto. In standard PTP 1 is manual, so this camera does not follow that numbering, or reports it differently. Not known which |
+| `0x5010` | exposure bias (name from standard PTP) | 0. The owner did not give the camera's setting |
 
 Setting `0xDF01` = 5 took between 0.3 s and 5.4 s. The camera may wait on its own screen for the user to confirm.
 Set timeouts of 60 s.
+
+The settings rows above (`0x5007`, `0x5005`, `0xD001`, `0xD02A`, `0xD240`) come from the change list that
+`0xD212` returns after remote mode starts (run 18). Each was matched to one value the owner read on the camera
+screen (all but `0x5010`), so one data point each. `GetDevicePropDesc` (`0x1014`) does not give the allowed values over Wi-Fi: the
+standard properties answer `0x2007` and the Fuji ones `0x200A`. Whether `GetDevicePropValue` (`0x1015`) reads
+them directly is not tested. Setting any of them is not tested.
 
 Properties from the libgphoto2 capture sequence (`0xD207`, `0xD208`, `0x500D`) answer `0x200A` (not supported)
 on the X-A5. Do not use them.
@@ -222,6 +237,6 @@ Speed: about 5 MB/s. A 6 to 7 MB full-size JPEG took 1.2 to 1.4 s.
 - How to control focus from the PC (a focus point, manual focus), and whether the lens already moves in live view.
 - What the `0xC001` event parameter is, and what `0xD222` counts.
 - Why one init with the accepted prefix was rejected once.
-- Camera settings (ISO, aperture, film simulation, exposure compensation), movies, thumbnails.
+- The allowed values of the camera settings, and how to set them (ISO, aperture, shutter speed, white balance, film simulation, exposure compensation). Movies, thumbnails.
 - Whether other X-A bodies behave the same.
 - Whether `0xDF24` = `0x2000C` and `0xD227` are needed on the X-A5 (we always sent them).
