@@ -19,7 +19,7 @@ GUID_PREFIX = bytes.fromhex("ada5485d87b27f0bd3d5ded0")  # the camera checks the
 HOST = "127.0.0.1"
 FAKE_JPEG = b"\xff\xd8\xff\xe0" + bytes(range(256)) * 4500 + b"\xff\xd9"   # about 1.1 MB, two chunks
 state = {"client_state": 2, "remote_ver": 0x20006, "capture_open": False, "objects": 3, "view": False,
-         "events": None}
+         "events": None, "servers": False}
 
 
 def listen(port):
@@ -46,26 +46,30 @@ def container(ctype, code, tid, payload=b""):
 
 def video_server():
     srv = listen(55742)
-    c, _ = srv.accept()
     jpeg = b"\xff\xd8\xff\xe0" + bytes(200) + b"\xff\xd9"
-    for _ in range(100):
-        total = 18 + len(jpeg)
+    while True:   # one client at a time, frames until the client leaves
+        c, _ = srv.accept()
         try:
-            c.sendall(struct.pack("<I", total) + bytes(12) + b"\xfe\x7f" + jpeg)
+            while True:
+                c.sendall(struct.pack("<I", 18 + len(jpeg)) + bytes(12) + b"\xfe\x7f" + jpeg)
+                time.sleep(0.05)
         except OSError:
-            break
-        time.sleep(0.05)
-    c.close()
-    srv.close()
+            pass
+        c.close()
 
 
 def event_server():
     srv = listen(55741)
-    c, _ = srv.accept()
-    state["events"] = c
-    time.sleep(10)
-    c.close()
-    srv.close()
+    while True:
+        state["events"], _ = srv.accept()   # the newest client gets the shot events
+
+
+def start_servers():
+    """The real camera opens both ports at InitiateOpenCapture. Ours stay open once started."""
+    if not state["servers"]:
+        state["servers"] = True
+        threading.Thread(target=event_server, daemon=True).start()
+        threading.Thread(target=video_server, daemon=True).start()
 
 
 def announce_shot(c):
@@ -92,8 +96,7 @@ def handle(c):
         if code == 0x1002 or code == 0x1003 or code == 0x101C or code == 0x1018:
             if code == 0x101C:
                 state["capture_open"] = True
-                threading.Thread(target=event_server, daemon=True).start()
-                threading.Thread(target=video_server, daemon=True).start()
+                start_servers()
             c.sendall(container(3, 0x2001, tid))
             if code == 0x1003:
                 return

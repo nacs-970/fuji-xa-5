@@ -3,7 +3,7 @@
     python3 tests/test_fake_camera.py        (or: pytest tests)
 
 The fake camera is built from public notes and our logs, so passing proves our sequencing and parsing, not
-that the real camera agrees. One session may open live view per fake process, so there is one test.
+that the real camera agrees. One test, one fake process.
 """
 import os
 import subprocess
@@ -29,7 +29,7 @@ def test_live_shoot_download():
             name, data = cam.download()          # ends live view first
             assert name == "DSCF0001.JPG" and data == FAKE_JPEG
             try:
-                cam.start_live()
+                cam.start_live()                 # the real camera drops the session if we try this
                 raise AssertionError("live view after a download must be refused")
             except FujiError:
                 pass

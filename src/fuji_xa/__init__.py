@@ -187,8 +187,8 @@ class Camera:
         """Enter remote mode and start live view. CHANGES CAMERA STATE (the official app does the same)."""
         if self._capture_tid is not None:
             return
-        if self._viewing:
-            raise FujiError("live view after a download is not supported: image view was only tested one-way")
+        if self._viewing:   # 2026-10-05: setting remote mode again made the X-A5 close the connection
+            raise FujiError("live view after a download is not possible in the same session. Start a new one.")
         self.set_prop(P_CLIENT_STATE, REMOTE_MODE, timeout=self.wait)
         self.events()
         if self.remote_version is not None:
