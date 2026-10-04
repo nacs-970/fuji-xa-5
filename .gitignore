@@ -7,6 +7,10 @@ captures/*
 artifacts/*
 !artifacts/README.md
 
+# Local agent instructions, per checkout
+AGENTS.local.md
+CLAUDE.local.md
+
 # Editor and OS noise
 *.swp
 .DS_Store
