@@ -93,7 +93,7 @@ Poll it as a substitute for events on the control connection.
 | Property | Meaning | Values seen on the X-A5 |
 |----------|---------|-------------------------|
 | `0xDF00` | camera state | 6 at the start of every session (remote access). After setting client state 11 it reads `0x0B`, meaning not known |
-| `0xDF01` | client state, set by the client | we set 5 (remote mode) and 11 (image view). Both accepted |
+| `0xDF01` | client state, set by the client | read 16 (`0x10`) right after OpenSession, before we set it (run 16). We set 5 (remote mode) and 11 (image view). Both accepted |
 | `0xDF21` | image-get version | 3 |
 | `0xDF22` | get-object version | 3 |
 | `0xDF24` | remote version | read `0x20003`. We set `0x2000C` (the value from public notes). Accepted |
@@ -173,10 +173,15 @@ shutter or of a download (observed 2026-10-05).
 camera shows "connection lost" and returns to its shooting screen. The owner must open the wireless screen
 again before the next session (observed, normal).
 
-After a session with a shot and a download (runs 12 and 13) the screen stayed black once the PC was back on its
-own network, and a firm press of the shutter button brought the live view back. The camera played its "ready"
-sound after the LED went off. A live-view-only session (run 8) was not checked this way. It may be linked to image
-view, which is not tested.
+After a session the screen stays black once the PC is back on its own network, and a firm press of the shutter
+button brings the live view back. The camera plays its "ready" sound after the LED goes off. The owner saw this
+after a shot with a download (runs 12 and 13) and also after a live-view-only session of 5 s with no photo and no
+image view (run 14). So image view is not the cause. After a live-view-only session (run 15) the owner waited about
+30 s: a light button (Q) and every other button did nothing, and only the shutter button brought the live view back.
+So it is not a sleeping screen. Writing `0xDF01` back to its start value (16) before CloseSession did not help: the
+shutter button then did not work either, and the camera had to be switched off and on (run 17). Do not do that.
+The cause is not known. The owner's view is that it is camera behaviour: over USB the camera also only opens its
+memory and does not return to the shooting mode itself. Press the shutter button once after a session.
 
 ## 8. Reading pictures
 

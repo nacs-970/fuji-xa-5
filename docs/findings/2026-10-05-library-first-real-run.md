@@ -21,6 +21,10 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 11 | `download -n 3` | `fuji-xa` | **Worked.** Handles 1, 2 and 3 were `DSCF8712`, `DSCF8711` and `DSCF8710`, the three pictures of run 10, newest first. All 6000x4000 JPEG, 6.5 to 7.0 MB, in one session, every operation `0x2001` |
 | 12 | `shoot -d /tmp/xa5-focus` (the owner said "ready" to the proposed one-photo test, subject at normal distance) | `fuji-xa` | **Worked.** One shutter release, handle 1 downloaded: `DSCF8713.JPG`, 6000x4000 JPEG, 5.2 MB, every operation `0x2001`. The picture is sharp where the focus fell (see "Focus") |
 | 13 | `shoot -d /tmp/xa5-focus2` (the owner said yes to one photo), focus point on the centre, wall 60 cm away, toy 15 cm away | `fuji-xa` | **Worked.** One shutter release, handle 1 downloaded: `DSCF8714.JPG`, 6000x4000 JPEG, 7.3 MB, every operation `0x2001`. The wall in the centre is sharp, the toy is soft (see "Focus") |
+| 14 | `preview --seconds 5 -o /tmp/xa5-preview.jpg`, live view only, no photo, to test whether the black screen after a session comes from image view | `fuji-xa` | **Worked.** Clean end (`0x1018`, CloseSession, both `0x2001`), one 640x480 JPEG of 11.0 KB. The owner saw the screen stay black after the LED went off, with no button pressed |
+| 15 | `preview --seconds 5`, live view only, then a wait of 30 s and a light button press (Q) | `fuji-xa` | **Worked**, clean end, 11.7 KB frame. Afterwards the Q button and every other button except the shutter did nothing. The shutter button brought the live view back |
+| 16 | `preview --seconds 5` with a new read-only `GetDevicePropValue` of `0xDF01` right after OpenSession and the version reads | `fuji-xa` | **Worked**, clean end, 11.7 KB frame. The read answered `0x2001`, 2 bytes: `0xDF01` = **16** (`0x10`) before we set it. Nothing was written back yet |
+| 17 | `preview --seconds 5` with a write of `0xDF01` = 16 (the value read in run 16) just before CloseSession, the owner agreed | `fuji-xa` | The camera accepted the write (`0x2001`) and CloseSession (`0x2001`), the frame was 11.7 KB. **Afterwards the screen stayed black and the shutter button did not bring it back: the owner had to switch the camera off and on.** The owner heard no "ready" sound but was not sure |
 
 Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test.
 
@@ -98,17 +102,46 @@ The owner heard the lens move before the shutter sound. Run 12 and run 13 togeth
 camera run its own autofocus with the settings made on the camera. Not tested: what happens at two different
 distances with the same point (the run 12 distance was not recorded), and any focus control from the PC.
 
-## The camera after the session (runs 12 and 13)
+## The camera after the session (runs 12 to 14)
 
 Owner's reports. Run 12: a few seconds after the shot and the download, the camera played its "ready" sound again
 but the screen stayed black. Run 13: the "ready" sound came after the LED went off, and the screen stayed black
 after the PC was back on its own network. A firm press of the shutter button brought the live view back. The
 library ended both sessions cleanly (`0x1016`, then CloseSession `0x1003`, both `0x2001`).
 
-Earlier runs showed the screen returning to the shooting screen after a session (see `docs/protocol/wifi.md`
-section 7). Those were sessions without a download, or the screen was not checked. So a possible link to image
-view (the download) is a guess. Not tested: a live-view-only session followed by a look at the screen, a session
-with a download but a different button press, and whether the library can restore the screen itself.
+Run 14 was a live-view-only session of 5 s: no photo, no image view. The owner saw the same thing: the screen
+stayed black after the LED went off, with no button pressed. So the link to image view was wrong. The black screen
+after the session does not depend on what the session did. Earlier notes that the camera "returns to its shooting
+screen" after a session were not checked against this (the owner may have pressed a button).
+
+The owner's Auto Power Off setting is none, so the camera does not switch itself off. A different screen-saving
+setting could still blank the screen.
+
+Run 15 (the same live-view-only session of 5 s, no photo) tested this. The owner waited about 30 s without
+touching the camera, then pressed a light button (Q): nothing happened. Every button except the shutter button did
+nothing. The shutter button brought the live view back. So the screen is not simply asleep: the camera stays in a
+locked state after the session ends, and only the shutter button leaves it. The library ended the session cleanly
+in every run (`0x1018`, CloseSession, both `0x2001`).
+
+Guess, tested in run 17 and **wrong**: the camera keeps some Wi-Fi remote state after CloseSession because the
+client never sets its client state (`0xDF01`) back. The value
+`0xDF01` has before our session is not recorded (the first `0xD212` list does not hold it). Run 16 read it: `0xDF01` is 16
+(`0x10`) at the start of a session, before we set 5 (remote mode) or 11 (image view). 16 is a value we had not seen.
+What 16 means is not known. How Fuji's own app ends a session is not known.
+
+Run 17 wrote `0xDF01` = 16 just before CloseSession, with the owner's agreement. The camera answered `0x2001` to
+the write and to CloseSession. Afterwards the screen stayed black and the shutter button no longer brought it back:
+the owner had to switch the camera off and on. So writing the start value back did not restore the camera, and it
+seems to have made the state worse than without it. One run only. The write-back was removed from the library
+again and is not to be repeated. The camera was usable after the power cycle (to be confirmed by the owner).
+
+So far the only known way back to the live view is the shutter button (runs 12 to 15). The cause of the locked
+screen is still not known.
+
+The owner's view: this is camera behaviour. Over USB the camera also shows no mode to switch to. It only opens the
+memory for access and does not go back to the shooting mode by itself. So a remote session of any kind leaves the
+camera in a state that the user ends on the camera. This fits runs 12 to 17 and is not proven. Decision: do not try
+to work around it. Document it, press the shutter button once after a session.
 
 ## Client name
 

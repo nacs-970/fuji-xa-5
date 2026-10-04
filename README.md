@@ -20,7 +20,7 @@ the evidence layout.
 - **Remote mode and live view work.** Our `scripts/fuji_remote_probe.py` set remote mode, started open
   capture and read live-view JPEG frames (640x480, about 60 fps) from the X-A5 over Wi-Fi. The live view shows a
   real image once the lens cap is off. One `InitiateCapture` releases the shutter and the picture is saved to
-  the SD card (owner confirmed twice). The camera screen goes black afterwards. Download works too, and shoot plus download runs in one session (`--stage shoot --download-after`): `--stage download` fetched the picture (6 MB) in 1.2 s. See
+  the SD card (owner confirmed twice). The camera screen is black during the session and stays black afterwards until the shutter button is pressed once (camera behaviour, see the [library finding](docs/findings/2026-10-05-library-first-real-run.md)). Download works too, and shoot plus download runs in one session (`--stage shoot --download-after`): `--stage download` fetched the picture (6 MB) in 1.2 s. See
   [remote-mode finding](docs/findings/2026-10-04-wifi-remote-mode-probe.md).
 - The protocol is written down in [docs/protocol/wifi.md](docs/protocol/wifi.md) (clean-room, with a status on
   every fact).
