@@ -27,6 +27,7 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 17 | `preview --seconds 5` with a write of `0xDF01` = 16 (the value read in run 16) just before CloseSession, the owner agreed | `fuji-xa` | The camera accepted the write (`0x2001`) and CloseSession (`0x2001`), the frame was 11.7 KB. **Afterwards the screen stayed black and the shutter button did not bring it back: the owner had to switch the camera off and on.** The owner heard no "ready" sound but was not sure |
 | 18 | `props`, read-only: live view starts, then `GetDevicePropDesc` for each property in the change list. No photo | `fuji-xa` | **Worked**, clean end. Every `0x1014` failed (`0x2007` for the 8 standard properties, `0x200A` for the 20 Fuji ones), so no allowed values. The current values from the change list matched the owner's camera settings (see "Camera settings") |
 | 19 | `props` again after the owner changed settings on the camera: ISO Auto3, f/3.6, 1/100, AF-C, Standard/Provia. No photo | `fuji-xa` | **Worked**, clean end. `0x5007` = `0x168`, `0xD001` = 1, `0xD02A` = `0x80000C80`, `0xD240` = `0x8000EA60`. See "Settings run 19" |
+| 20 | `props` after the owner set 1/500 (dial on M). No photo | `fuji-xa` | **Worked**, clean end. `0xD240` = `0x8007A120` (low part 500000). The other settings were unchanged from run 19 |
 
 Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test.
 
@@ -182,6 +183,16 @@ The raw output is in `captures/wifi-gphoto2/2026-10-05-props-2.txt` (git-ignored
 - The focus mode value stayed `0x8001` although the owner set AF-C (confirmed by the owner). So `0x500A` does not tell
   AF-S and AF-C apart: it is not the AF mode, or the camera reports one value for both in remote mode, or it changes
   only in another state. Not known.
+
+## Settings run 20
+
+The raw output is in `captures/wifi-gphoto2/2026-10-05-props-3.txt` (git-ignored). The owner set 1/500 with the dial on M.
+`0xD240` read `0x8007A120`: the low part is 500000, so 1/500 fits the pattern "denominator x 1000". With 1/200 (200000)
+and 1/60 (60000) that makes three points, all with the top bit set. Aperture (`0x168`), film simulation (1), ISO
+(`0x80000C80`) and focus mode (`0x8001`) did not change from run 19.
+
+The owner saw 1/500 on the screen before the run and after it. So the session does not change the shutter speed. Run 19's
+change from 1/100 to 1/60 is still unexplained (the speed may not have been 1/100 when the run started, or a wheel moved).
 
 ## Client name
 
