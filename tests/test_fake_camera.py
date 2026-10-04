@@ -26,8 +26,10 @@ def test_live_shoot_download():
             jpeg = cam.frame()
             assert jpeg[:2] == b"\xff\xd8" and jpeg[-2:] == b"\xff\xd9"
             assert cam.shoot() is True
+            assert cam.shoot() is True           # right after the first: the fake answers Device Busy once
             name, data = cam.download()          # ends live view first
             assert name == "DSCF0001.JPG" and data == FAKE_JPEG
+            assert cam.download(2)[1] == FAKE_JPEG   # a second download in the same session
             try:
                 cam.start_live()                 # the real camera drops the session if we try this
                 raise AssertionError("live view after a download must be refused")

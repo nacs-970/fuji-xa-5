@@ -248,7 +248,12 @@ class Camera:
         `timeout` seconds. The picture exists in both cases once the camera accepted the shutter.
         """
         self.start_live()
-        self.op(0x100E, (0, 0), timeout=self.wait)   # InitiateCapture, live view must be open
+        for _ in range(30):   # a second shot right after the first answers 0x2019, device busy (2026-10-05)
+            if self.op(0x100E, (0, 0), ok=(OK, 0x2019), timeout=self.wait)[0] == OK:   # InitiateCapture
+                break
+            time.sleep(0.5)
+        else:
+            raise FujiError("the camera stayed busy for 15 s, the shutter was not released")
         end = time.time() + timeout
         while time.time() < end:
             try:

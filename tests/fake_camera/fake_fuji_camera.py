@@ -19,7 +19,7 @@ GUID_PREFIX = bytes.fromhex("ada5485d87b27f0bd3d5ded0")  # the camera checks the
 HOST = "127.0.0.1"
 FAKE_JPEG = b"\xff\xd8\xff\xe0" + bytes(range(256)) * 4500 + b"\xff\xd9"   # about 1.1 MB, two chunks
 state = {"client_state": 2, "remote_ver": 0x20006, "capture_open": False, "objects": 3, "view": False,
-         "events": None, "servers": False}
+         "events": None, "servers": False, "busy_until": 0}
 
 
 def listen(port):
@@ -110,6 +110,10 @@ def handle(c):
         elif code == 0x1006:
             c.sendall(container(3, 0x2001, tid, struct.pack("<I", state["objects"])))
         elif code == 0x100E:
+            if time.time() < state["busy_until"]:   # the X-A5 answered Device Busy to a quick second shot
+                c.sendall(container(3, 0x2019, tid))
+                continue
+            state["busy_until"] = time.time() + 1.0
             if state["capture_open"]:
                 state["objects"] += 1
                 if state["events"]:
