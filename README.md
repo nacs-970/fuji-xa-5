@@ -22,6 +22,10 @@ the evidence layout.
   real image once the lens cap is off. One `InitiateCapture` releases the shutter and the picture is saved to
   the SD card (owner confirmed twice). The camera screen is black during the session and stays black afterwards until the shutter button is pressed once (camera behaviour, see the [library finding](docs/findings/2026-10-05-library-first-real-run.md)). Download works too, and shoot plus download runs in one session (`--stage shoot --download-after`): `--stage download` fetched the picture (6 MB) in 1.2 s. See
   [remote-mode finding](docs/findings/2026-10-04-wifi-remote-mode-probe.md).
+- **Focus.** A shot released from the PC seems to focus at the centre of the frame. The camera's focus point can be
+  read (`fuji-xa props`, property `0xD17C`), and a write of it is accepted and ignored. To see where autofocus ran for
+  any photo, read its metadata: `exiftool -FocusPixel -AFMode photo.JPG` (the centre of the 6000x4000 frame is
+  `3000 2000`). See [protocol notes](docs/protocol/wifi.md) section 6.
 - The protocol is written down in [docs/protocol/wifi.md](docs/protocol/wifi.md) (clean-room, with a status on
   every fact).
 - The goal is **not new**: [libfuji](https://github.com/petabyt/libfuji) (MIT, C, active) and its Android app

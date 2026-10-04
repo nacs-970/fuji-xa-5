@@ -160,6 +160,13 @@ the focus mode and focus point set on the camera. With the point on the centre a
 sharp and a toy 15 cm from the lens was soft (too close to focus). The owner heard the lens move before the shutter
 sound (run 13). Focus control from the PC is not known, but the focus point position can be read (`0xD17C`, section 4).
 
+**Checking where autofocus ran.** Every photo carries it in its Fuji MakerNote: `exiftool -FocusPixel -AFMode photo.JPG`
+(tag `0x1023`, two numbers: x and y in pixels of the 6000x4000 picture, centre `3000 2000`). If the autofocus grid spans
+the whole frame (not checked), a cell (column 1 to 13, row 1 to 7) is near x = (column - 0.5) / 13 x 6000 and
+y = (row - 0.5) / 7 x 4000. Photos released from the PC read (3000, 2000) or a few pixels off it, whatever point the
+camera showed or we wrote (runs 23, 24, 36 and 37). That is one tag from a few photos. Not checked: a photo taken with
+the camera's own shutter button at another point.
+
 After the command the camera sends events on TCP 55741. Each event is a 28-byte container: length 28,
 type 4, code, transaction id (1), four u32 parameters, the fourth always 0 (observed). Read the container by
 its length field. The first three parameters:

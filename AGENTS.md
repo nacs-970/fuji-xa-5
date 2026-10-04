@@ -74,6 +74,8 @@ pyproject.toml                 package metadata, no license field until the owne
   2.5.34 binary or from `master`. Say "not tested" when it is not tested.
 - Clean-room: write protocol behavior in your own words. Public notes (libfuji, fuji-cam-wifi-tool,
   libgphoto2) are references, not code to paste. See [docs/legal-and-clean-room.md](docs/legal-and-clean-room.md).
+- To see where autofocus ran for a photo, read its metadata: `exiftool -FocusPixel -AFMode photo.JPG` (6000x4000 frame,
+  centre `3000 2000`; `exiftool` is installed). Details and the caveat: [wifi.md](docs/protocol/wifi.md) section 6.
 - Test new probe code against the fake camera first: run `tests/fake_camera/fake_fuji_camera.py` and pass
   `--ip 127.0.0.1`. The fake camera is built from public notes, not from a recording. Passing it does not prove
   the real camera works.
