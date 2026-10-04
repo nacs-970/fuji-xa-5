@@ -16,8 +16,11 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 6 | `shoot -d /tmp` (the owner said yes to one photo) | `fuji-xa` | **Worked.** One shutter release, then the newest picture downloaded: `DSCF8707.JPG`, 6000x4000 JPEG, 4 988 909 bytes, in 5 chunks. Exit status 0 |
 | 7 | three shots in one session (shot 1 + download, shot 2 + download, shot 3 only), to test the black-screen theory | `fuji-xa` | Shot 1 and its download worked (`DSCF8708.JPG`, 6 852 340 bytes). Going back to live view for shot 2 failed: `0xDF01` = 5 was accepted after about 3 s, then the camera closed the control connection. Shots 2 and 3 were not taken |
 | 8 | `preview --seconds 30`, live view only, no shutter, to test the black-screen theory | `fuji-xa` | **Worked.** 30 s of live view, clean end, no photo taken. The owner saw the screen black with the LED blinking from the moment the connection started until the end |
+| 9 | `shoot -n 3`, no busy retry yet | `fuji-xa` | Shot 1 accepted. Shot 2's `0x100E` answered `0x2019` (Device Busy) right after the completion event, so the library raised and the session ended cleanly. One picture was taken and not downloaded |
+| 10 | `shoot -n 3` with a busy retry, HIGH PERFORMANCE on, "change" not pressed | `fuji-xa` | All 3 shots accepted: shots 2 and 3 each answered `0x2019` once, then `0x2001` after 0.5 s. The switch to image view and the download of handle 1 worked (`DSCF8712.JPG`, 6 823 794 bytes), but the CLI could not save it because the folder did not exist (our bug, fixed). Handles 2 and 3 were not tried |
+| 11 | `download -n 3` | `fuji-xa` | **Worked.** Handles 1, 2 and 3 were `DSCF8712`, `DSCF8711` and `DSCF8710`, the three pictures of run 10, newest first. All 6000x4000 JPEG, 6.5 to 7.0 MB, in one session, every operation `0x2001` |
 
-Runs 1 and 2 changed nothing on the camera or the SD card.
+Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy.
 
 ## What run 3 showed
 
@@ -58,6 +61,19 @@ Runs 1 and 2 changed nothing on the camera or the SD card.
   blinking from the start of the connection to its end. So the black screen is the camera's state during a Wi-Fi
   remote session. It is not a fault and not caused by our code. It needs no fix, and the library cannot change it.
   A user must know that the camera screen shows nothing while remote control runs.
+
+## What runs 9 to 11 showed (several shots, several downloads)
+
+- **Device Busy.** A second `InitiateCapture` straight after a completed shot answers `0x2019`. One retry after
+  0.5 s was enough, four times. HIGH PERFORMANCE on (run 10) did not remove it. The library now retries every
+  0.5 s for up to 15 s.
+- **Several shots, then several downloads, in one session works.** Take all shots in live view, then switch to
+  image view once and download handles 1, 2, 3.
+- **Handle 3 works** when the camera holds at least three pictures from the recent shots (it answered `0x2007`
+  on 2026-10-04 when the count was 2).
+- The pictures are blurred close-ups of the same scene, as before. Focus before the shot is still not known.
+- Runs 10 and 11 reused the name `fuji-xa` without pressing "change" and were accepted at once. That fits the
+  one-registered-name theory: the same name reconnects.
 
 ## Client name
 

@@ -154,6 +154,10 @@ its length field. The first three parameters:
 The first parameter is not the handle to download (see section 8). The picture is written to the SD card, and
 the camera makes its shutter sound.
 
+**Device Busy (observed 2026-10-05).** A second `InitiateCapture` right after a completed shot (after the
+`0x400D` event) answers `0x2019`. Retry every 0.5 s: one retry was enough in four cases. HIGH PERFORMANCE on
+or off made no difference. Take several shots in a row in live view, then download.
+
 The camera screen is black while the session is open, with the LED blinking. The owner saw this after shots
 with and without a download, and also when the connection started, before any shot (owner reports
 2026-10-04 and 2026-10-05). A half-press wakes it. HIGH PERFORMANCE off does not change this. A 30 s run with
@@ -187,7 +191,8 @@ failed: setting `0xDF01` = 5 was accepted after about 3 s, and then the camera c
 Take all shots first, then download.
 
 **Handles (observed).** Handles start at 1 and **handle 1 is the newest picture**, handle 2 the next older, and
-so on up to the count. Handle 3 answered `0x2007` when the count was 2.
+so on up to the count. Handle 3 answered `0x2007` when the count was 2. After three new shots, handles 1, 2 and 3 were those three
+pictures, newest first, and three downloads in one session worked (observed 2026-10-05).
 `GetNumObjects` (`0x1006`) returned 0 every time and is not usable.
 
 **Count.** `0xD222` read 0, 1, 2, 3 across our shots, so it grows by one per picture. It did not include a
