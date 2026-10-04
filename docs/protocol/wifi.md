@@ -1,0 +1,193 @@
+# Fuji Wi-Fi remote protocol as the X-A5 uses it
+
+Clean-room notes in our own words. Camera: Fujifilm X-A5, firmware 1.21. Everything marked **observed** was
+seen on this camera on 2026-10-04 with our scripts (`scripts/`), and the evidence is in
+[the remote-mode finding](../findings/2026-10-04-wifi-remote-mode-probe.md) and the
+[handshake](../findings/2026-10-04-wifi-gphoto2-handshake-failure.md) and
+[session](../findings/2026-10-04-wifi-session-probe.md) findings. **Inferred** means taken from public notes
+about other bodies and not checked here. **Not known** means we have no answer.
+
+All integers are little-endian. "Container" means a USB-style PTP container.
+
+## 1. Network
+
+| Item | Value | Status |
+|------|-------|--------|
+| Access point | Open (no password). Name starts with `FUJIFILM-`, then the model, then four digits | observed |
+| When it exists | Only while the camera shows its WIRELESS COMMUNICATION screen. It disappears when the camera sleeps or the session ends | observed |
+| Camera address | `192.168.0.1`. The camera is the DHCP server and gives the client an address in a /16 network | observed |
+| Control port | TCP 55740, open as soon as the access point is up | observed |
+| Event port | TCP 55741, refuses connections until InitiateOpenCapture succeeds | observed |
+| Live-view port | TCP 55742, same rule | observed |
+
+Practical notes (observed): the access point can take several scans to appear, and the control port opens a few
+seconds after the camera answers ping. Connections within about 10 s of an accepted one often time out. Open the
+wireless screen on the camera, join, run one session, leave.
+
+## 2. Control connection handshake (TCP 55740)
+
+The client sends one 82-byte Init Request. The camera answers with an Ack (accepted) or Fail.
+
+Init Request (82 bytes):
+
+| Offset | Size | Field | Status |
+|--------|------|-------|--------|
+| 0 | 4 | length = 82 | observed |
+| 4 | 4 | packet type = 1 | observed |
+| 8 | 4 | magic `0x8F53E4F2` | observed |
+| 12 | 16 | client GUID, see the rule below | observed |
+| 28 | 54 | client name, UTF-16, zero padded | observed |
+
+Init Ack (68 bytes): length 68, type 2, a 4-byte index, the camera's 16-byte GUID, then the camera name as
+UTF-16 padded to 40 bytes (the name was `X-A5`). Observed.
+
+Init Fail (12 bytes): length 12, type 5, a 4-byte reason. Reasons seen: `0x201D` (invalid parameter). The
+public notes also name `0x2019` (device busy). Observed for `0x201D`.
+
+**GUID rule (observed).** The camera accepts a GUID only if its first 12 bytes match the prefix
+`ada5485d87b27f0bd3d5ded0`, which is the value used by the public tool `fuji-cam-wifi-tool`. The last four bytes
+may be zero or random. A random GUID and a different fixed GUID were both rejected with `0x201D`. The client
+name is not checked.
+
+**Open point.** One run with the accepted prefix was rejected (`0x201D`), and runs a minute later were
+accepted. The cause is not known. The camera also showed a name and a "transmit OK?" style prompt on its screen
+at times, and the owner pressed OK. Retrying the init up to four times (waiting 0, 1, 2, 4 s) costs nothing.
+
+**Do not send the init packet twice on one connection.** After the Ack, a second init on the same socket makes
+the camera answer with Session Not Open. This is why libgphoto2's Fuji driver fails (observed).
+
+After the Ack, wait about 50 ms before the first command (inferred, harmless).
+
+## 3. PTP over the control connection
+
+After the Ack the socket carries ordinary PTP containers, as on USB:
+
+`u32 length (all bytes), u16 type (1 command, 2 data, 3 response, 4 event), u16 code, u32 transaction id, then
+parameters (u32 each)`.
+
+Transaction ids start at 1 and count up. `OpenSession` (`0x1002`, parameter 1) works at once and returns
+`0x2001`. `GetDeviceInfo` over Wi-Fi returns the same list as over USB: 25 operations, 7 events and 8
+properties, with no capture operation listed (observed). The camera still accepts `0x101C` and `0x100E`.
+Do not rely on DeviceInfo to find what the camera can do.
+
+Never send the Fuji operations `0x900C`, `0x900D` or `0x901D`. They write firmware files.
+
+## 4. Fuji state properties and the event list
+
+Properties are read with `GetDevicePropValue` (`0x1015`) and written with `SetDevicePropValue` (`0x1016`, data
+phase of 2 or 4 bytes).
+
+**Event list, property `0xD212` (observed).** A read returns a list of properties that changed:
+`u16 count`, then `count` entries of `u16 property code, u32 value`. An empty list is the two bytes `00 00`.
+Poll it as a substitute for events on the control connection.
+
+| Property | Meaning | Values seen on the X-A5 |
+|----------|---------|-------------------------|
+| `0xDF00` | camera state | 6 at the start of every session (remote access). After setting client state 11 it reads `0x0B`, meaning not known |
+| `0xDF01` | client state, set by the client | we set 5 (remote mode) and 11 (image view). Both accepted |
+| `0xDF21` | image-get version | 3 |
+| `0xDF22` | get-object version | 3 |
+| `0xDF24` | remote version | read `0x20003`. We set `0x2000C` (the value from public notes). Accepted |
+| `0xDF25` | remote get-object version | read 1. We set 5 before image view. Accepted |
+| `0xD222`, `0xD220`, `0xD401` | picture count (see section 8) | 0, 1, 2, 3 across our shots |
+| `0xD229` | picture counter, name from public notes ("capture remaining") | falls by one a few seconds after a shot. Starting values near `0xB81`. After InitiateOpenCapture it reads `0x281` lower |
+
+Setting `0xDF01` = 5 took between 0.3 s and 5.4 s. The camera may wait on its own screen for the user to confirm.
+Set timeouts of 60 s.
+
+Properties from the libgphoto2 capture sequence (`0xD207`, `0xD208`, `0x500D`) answer `0x200A` (not supported)
+on the X-A5. Do not use them.
+
+## 5. Remote mode and live view
+
+Sequence (observed, 1 to 2 s in total):
+
+1. Init, `OpenSession`.
+2. Read `0xD212` until `0xDF00` is not 0 (it was 6 at once).
+3. Set `0xDF01` = 5. Read the events again.
+4. Set `0xDF24` = `0x2000C`.
+5. `InitiateOpenCapture` (`0x101C`, parameters 0, 0). Returns `0x2001` in about 0.6 s. Remember this
+   operation's transaction id.
+6. Connect TCP 55741 and 55742. No handshake is needed on either. The camera sends data right away.
+7. Read live-view frames and drain them continuously. If the client stops reading, the camera is blocked.
+8. Finish with `TerminateOpenCapture` (`0x1018`, parameter = the transaction id from step 5), then
+   `CloseSession` (`0x1003`).
+
+**Live-view frame, TCP 55742 (observed).** An 18-byte header, then a JPEG:
+
+| Offset | Size | Field |
+|--------|------|-------|
+| 0 | 4 | total frame length, header included |
+| 4 | 4 | zero |
+| 8 | 4 | frame counter (the first frame we read had 5) |
+| 12 | 6 | zero |
+| 18 | n | JPEG data, 640x480 baseline, picture has black bars (3:2 picture in a 4:3 frame) |
+
+About 60 frames per second. A frame with the lens cap on is about 6.6 KB, a normal scene about 11.4 KB. The
+`fe 7f` marker named in public notes was not present.
+
+## 6. Shutter
+
+With open capture running, send **one** `InitiateCapture` (`0x100E`, parameters 0, 0). It returns `0x2001`
+at once (observed, three runs). No focus step is needed. Whether the camera focuses before the shot is not
+known.
+
+After the command the camera sends events on TCP 55741. Each event is a 28-byte container: length 28,
+type 4, code, transaction id (1), three u32 parameters (observed):
+
+| Delay after the command | Event code | Parameters |
+|-------------------------|-----------|------------|
+| 1.5 to 2 s | `0xC004` (Fuji ObjectAdded) | `0x0E`, `0x0E`, 0 |
+| about 2.5 s | `0xC001` | `0x0E`, `0x0E`, a changing value. Meaning not known |
+| about 3.5 s | `0x400D` (PTP CaptureComplete) | `0x0E`, `0x0E`, 0 |
+
+The first parameter is not the handle to download (see section 8). The picture is written to the SD card, and
+the camera makes its shutter sound.
+
+The camera screen goes black after the shot and wakes on a half-press of the shutter button. HIGH PERFORMANCE
+off does not change this (owner report). The cause is not known.
+
+## 7. Ending a session
+
+`TerminateOpenCapture`, then `CloseSession`, then close the sockets. After the client leaves the Wi-Fi, the
+camera shows "connection lost" and returns to its shooting screen. The owner must open the wireless screen
+again before the next session (observed, normal).
+
+## 8. Reading pictures
+
+Remote mode does not expose the picture list. Switch the same session to image view:
+
+1. `TerminateOpenCapture` if live view is open, then close the 55741 and 55742 sockets and wait 0.5 s.
+2. Read the events. Set `0xDF00` = 6. Read the events twice.
+3. Set `0xDF01` = 11. Read `0xDF25`, set it to 5. Read the events.
+4. The event list now holds `0xDF00` = `0x0B` and `0xD222` = the picture count.
+5. `GetObjectInfo` (`0x1008`, parameter = handle).
+6. Set `0xD227` = 1 (from public notes, effect not tested here).
+7. `GetPartialObject` (`0x101B`, handle, offset, size) in chunks of up to 1 MiB, until the size from step 5.
+8. Set `0xD227` = 0.
+
+All observed to work, including the switch from remote mode to image view in one session.
+
+**Handles (observed).** Handles start at 1 and **handle 1 is the newest picture**, handle 2 the next older, and
+so on up to the count. Handle 3 answered `0x2007` when the count was 2.
+`GetNumObjects` (`0x1006`) returned 0 every time and is not usable.
+
+**Count.** `0xD222` read 0, 1, 2, 3 across our shots, so it grows by one per picture. It did not include a
+picture the owner took earlier with the lens cap on, so it is not the total on the card. What it counts is not
+known.
+
+**ObjectInfo layout (observed).** The camera returns the standard PTP dataset: storage id (u32 at 0), format
+(u16 at 4, `0x3801` for JPEG), protection (u16 at 6), compressed size (u32 at 8). The file name is a PTP string
+at offset 52: one byte with the character count, then UTF-16.
+
+Speed: about 5 MB/s. A 6 to 7 MB full-size JPEG took 1.2 to 1.4 s.
+
+## 9. What is not known or not done
+
+- Whether the camera focuses before the shot, and how to control focus.
+- What the `0xC001` event parameter is, and what `0xD222` counts.
+- Why one init with the accepted prefix was rejected once.
+- Why the camera screen goes black after a shot.
+- Camera settings (ISO, aperture, film simulation, exposure compensation), movies, thumbnails.
+- Whether other X-A bodies behave the same.
+- Whether `0xDF24` = `0x2000C` and `0xD227` are needed on the X-A5 (we always sent them).
