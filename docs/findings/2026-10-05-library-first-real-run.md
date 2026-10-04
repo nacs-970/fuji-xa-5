@@ -48,11 +48,12 @@ was one fresh Wi-Fi join with WIRELESS COMMUNICATION reopened on the camera.
 | 38 | Scratch script `focus_s1.py`: live view, then vendor op `0x9026` (no parameters), 3 s, `0x9027` if accepted. No photo. The owner said "ready, yes vendor" and listened | `xa5-probe` | **`0x9026` answered `0x2001`**, `0x9027` answered `0x2001`. `0xD209` read 0 before, **1 after `0x9026`** (still 1 about 3 s later) and 0 after `0x9027`. Nothing else in the change list changed. **The owner heard the lens move.** The session ended normally. See "Locking autofocus from the PC" |
 | 39 | Scratch script `focus_af.py`: live view with a sharpness reading every 0.25 s, write `0xD17C` = `0x03020101`, `0x9026` (no parameters), 4 s, one shot while locked, `0x9027`, download. The owner said "ready, yes vendor, yes shoot"; the subject was a screen with text | `xa5-probe` | `0x9026`, the shutter command and `0x9027` all answered `0x2001`, CaptureComplete arrived, exit status 0. `0xD209` went 0 to 1 within about 0.5 s of `0x9026` and stayed 1 until `0x9027` (about 5 s), never 2 or 3. One photo, `DSCF8722.JPG`: `FocusPixel` (2983, 1983), `AFMode` Single Point, `FocusWarning` Good. See "Locking autofocus from the PC" |
 | 40 | Scratch script `focus_pt.py`: live view with a PC preview (`serve` in a thread, browser on port 8080), 10 s, write `0xD17C` = `0x03020101`, `0x9026`, 4 s, `0x9027`, 8 s more; an 8 x 6 edge-strength grid of the live-view frames. No photo. The owner said "ready, yes vendor, with pc preview". The subject was a plush toy left of the centre, and the top-left corner of the frame was plain wall | `xa5-probe` | `0x9026` and `0x9027` answered `0x2001`. `0xD209` read 0, then 1 about 0.3 s after the lock, then 0 after the unlock. The frame was blurred before the lock, the toy's face was sharp at the end of the lock and still sharp 8 s after the unlock. The cells that got sharper are columns 3 and 4, rows 2 and 3 (x 160 to 320, y 80 to 240 of the 640x480 frame), next to the centre. The top-left cell did not change. So the lens focused on the object near the centre, not at the written top-left point. See "Locking autofocus from the PC" |
-| 41 | `fuji-xa -v serve --seconds 90` with the new Focus button and Space key on the page (`Camera.focus()`), a browser on port 8080. The owner said "ready, y vendor" | `xa5-probe` | Every `0x9026` and `0x9027` answered `0x2001` (at least 28 pairs in the log tail), the session ended normally. The log had no timestamps. The owner: "shutter button didn't work at all, i have to use spacebar" (not clear whether that meant the Focus button on the page or the camera's own shutter button). See "Focus from the preview page" |
+| 41 | `fuji-xa -v serve --seconds 90` with the new Focus button and Space key on the page (`Camera.focus()`), a browser on port 8080. The owner said "ready, y vendor" | `xa5-probe` | Every `0x9026` and `0x9027` answered `0x2001` (at least 28 pairs in the log tail), the session ended normally. The log had no timestamps. The owner: "shutter button didn't work at all, i have to use spacebar" (the owner later said this meant the camera's own shutter button: it did not focus during the session, as in run 28). See "Focus from the preview page" |
 | 42 | The same with `--seconds 30` and timestamps on the log lines. The owner said "retry again 30s this time" and "ready" | `xa5-probe` | All operations answered `0x2001`. The pairs were not balanced: four `0x9026` with only two `0x9027` between 25.96 s and 32.40 s of the log, while the owner clicked the page button. Later presses came as clean pairs. The session ended normally. See "Focus from the preview page" |
 | 43 | `fuji-xa -v serve --seconds 30` again, after the race fix, with the duration of each operation in the log. The owner said "ready" | `xa5-probe` | 13 locks and 13 releases, strictly alternating, all `0x2001`. The session ended normally. `0x9026` took 0.00 to 0.04 s (0.41 s once), `0x9027` 0.00 to 2.51 s. The owner: clicks on the page button focused the lens, Space holds of about 2 s focused it, and the focus showed in the preview within 1 to 2 s. See "Focus from the preview page" |
+| 44 | Scratch script `button_watch.py`, read-only: live view with the PC preview (its Focus button switched off), the property list read about 10 times a second and the event port listened to for 75 s, printing only changes. The owner pressed the shutter (half-press), Q, DISP/BACK and Menu. The owner said "ready for button" | `xa5-probe` | **No property changed and no event arrived** in 75 s (22 properties in the list). None of the camera's buttons did anything for the session, as the owner saw it; a half-press of the shutter woke the black screen. The owner also tried Space and the page's Focus button: they were refused (HTTP 500) as designed. The session ended normally. See "Camera buttons" |
 
-Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 to 35. Runs 36 and 37 took one each. Run 38 took none, run 39 one and runs 40 to 43 none.
+Runs 1 and 2 changed nothing on the camera or the SD card. Run 9 left one picture on the card without a copy. Run 12 was taken with a plain "ready" after the offer of a one-photo test. Run 23 took one picture and run 24 three. Runs 25 and 26 took none, and so did 27 to 35. Runs 36 and 37 took one each. Run 38 took none, run 39 one and runs 40 to 44 none.
 
 ## What run 3 showed
 
@@ -310,9 +311,8 @@ Run 40 asked the same question with no shutter command: write `0xD17C` to top-le
 - **A bug of ours showed in run 42.** `Camera` set its "locked" flag after the lock operation had finished, and the
   page sends "down" and "up" from two threads. A quick click sent "up" while the lock was still in flight, so the release
   was skipped and the camera stayed locked (four locks, two releases). The lock now covers the check, the operation and
-  the flag. A test on the fake camera reproduces the race without the lock and passes with it. This may be what the owner
-  saw in run 41 (the page button not working while holding Space did), but that is a guess: the owner's words were
-  "shutter button didn't work at all", which could also mean the camera's own button.
+  the flag. A test on the fake camera reproduces the race without the lock and passes with it. The owner later said run 41's
+  "shutter button didn't work" meant the camera's own shutter button, so this bug is not what they saw in run 41.
 - **Timing (run 43, measured with the new duration log).** `0x9026` answers at once, 0.00 to 0.04 s (0.41 s the first time).
   `0x9027` took 0.00 to 2.51 s, with no clear link to how long the owner held. My guess in the first version of this
   text, that `0x9026` takes about 0.9 s, was wrong: it came from log spacing when presses queued behind a slow
@@ -322,10 +322,23 @@ Run 40 asked the same question with no shutter command: write `0xD17C` to top-le
   The fake-camera test for the race now starts the release exactly while the lock is in flight, instead of two threads
   started together, which failed about one run in six.
 - **Owner's report on run 43:** a mouse click on the page button focused the lens, a Space hold focused it, and the preview
-  showed the focus within 1 to 2 s. So a click of about 0.15 s is enough and the page needs no minimum hold. Run 41's
-  "didn't work" fits the race fixed before run 43, but that stays an inference.
+  showed the focus within 1 to 2 s. So a click of about 0.15 s is enough and the page needs no minimum hold.
+- The camera's own shutter button did not focus during the session in runs 28 and 41 (owner). Why is not known.
 - Not known: whether a held lock stops further focusing (an X-T3 over USB does, public notes), what the camera does
   with a lock while the lens is already focused, and whether the camera's own shutter button reports anything to the PC.
+
+## Camera buttons (run 44)
+
+Run 44 asked whether the camera tells the PC when its own buttons are pressed during a session. It does not. While the
+owner pressed the shutter (half-press), Q, DISP/BACK and Menu, the property list and the event port showed no change at
+all for 75 s. The same method did show our own lock (`0xD209` changed in runs 38 to 43), so it can see changes. The
+owner saw no button do anything except the half-press waking the black screen, and the Focus button and Space on the
+preview page were refused on purpose in this run.
+- So the camera's own shutter button cannot focus and cannot be mapped to the PC's lock. The PC is the only way to focus.
+- The owner added afterwards that the dials and a full press of the shutter did nothing either during a session (no photo
+  was taken). Those two were not part of the script's 75 s record, so only the camera's own behaviour is known there,
+  not whether it reported them to the PC.
+- Not tested: the touch screen, and pressing for longer.
 
 Public sources read after run 39 (2026-10-05, listed in `docs/references.md`, nothing copied): none says what `0x9026` takes.
 The Go package `mikefsq/ptp/fuji` only names it. On USB (X-T3, X-T5) autofocus is a half press: `0xD208` = `0x9300` then
