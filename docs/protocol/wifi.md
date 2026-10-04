@@ -46,8 +46,17 @@ public notes also name `0x2019` (device busy). Observed for `0x201D`.
 
 **GUID rule (observed).** The camera accepts a GUID only if its first 12 bytes match the prefix
 `ada5485d87b27f0bd3d5ded0`, which is the value used by the public tool `fuji-cam-wifi-tool`. The last four bytes
-may be zero or random. A random GUID and a different fixed GUID were both rejected with `0x201D`. The client
-name is not checked.
+may be zero or random. A random GUID and a different fixed GUID were both rejected with `0x201D`.
+
+**Client name (observed; the explanation is the owner's theory and fits every run).** The camera seems to
+accept only the client name it registered last. On 2026-10-05 the owner reopened the wireless screen without
+pressing "change" on the camera. The name `fuji-xa` was then refused with `0x201D` on 10 tries in two runs,
+while `xa5-probe`, the name used before, was accepted at once. In a later run the owner pressed "change" on the camera first (in the owner's words, to let any device
+connect) and then OK to confirm the transfer. `fuji-xa` was accepted on the first try with no refusal. The packets differ only in the name.
+Not tested: whether `xa5-probe` is now refused without "change" (the theory says yes). Not tested: whether OK alone, without "change", would also work. The earlier handshake tests (2026-10-04) accepted both `xa5-probe` and `CameraClient`
+within an hour. Whether the owner pressed "change" between them was not recorded, so that does not contradict
+the theory. A client should say, when refused, that the camera may expect its last name or a "change" on the
+camera.
 
 **Open point.** One run with the accepted prefix was rejected (`0x201D`), and runs a minute later were
 accepted. The cause is not known. The camera also showed a name and a "transmit OK?" style prompt on its screen
@@ -133,7 +142,8 @@ at once (observed, three runs). No focus step is needed. Whether the camera focu
 known.
 
 After the command the camera sends events on TCP 55741. Each event is a 28-byte container: length 28,
-type 4, code, transaction id (1), three u32 parameters (observed):
+type 4, code, transaction id (1), four u32 parameters, the fourth always 0 (observed). Read the container by
+its length field. The first three parameters:
 
 | Delay after the command | Event code | Parameters |
 |-------------------------|-----------|------------|

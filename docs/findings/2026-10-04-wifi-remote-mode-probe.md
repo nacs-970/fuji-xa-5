@@ -71,7 +71,8 @@ and its socket drained in a thread.
 | TerminateOpenCapture, CloseSession | both OK |
 
 Each event packet is 28 bytes: u32 length, u16 type (4 = event), u16 code, u32 transaction id (1), then
-three u32 parameters.
+four u32 parameters (the first three are listed below, the fourth was always 0; corrected 2026-10-04
+when the fake camera test showed that 12 + 3 x 4 is only 24 bytes).
 
 The camera itself reported one picture taken (frames remaining dropped by one, ObjectAdded, CaptureComplete).
 The owner has not yet confirmed the picture on the card, so treat "a photo was written" as reported by the
