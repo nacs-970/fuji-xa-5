@@ -1,6 +1,9 @@
 # Plan 07: Implementation
 
-Status: waits for the results of plans 03 to 06. Do not start building before one route is understood.
+Status: Branch 3 started on 2026-10-04 with the Python library in `src/fuji_xa/` (`Camera` class and the
+`fuji-xa` command: preview, shoot, download). It follows the probe sequence that ran on the real X-A5 and is
+tested against the fake camera. `preview` ran on the real camera on 2026-10-05 ([finding](../findings/2026-10-05-library-first-real-run.md)); `shoot` and `download` have not. The libgphoto2 patch (Branch 2) is
+the second step and is not started.
 
 ## Question
 

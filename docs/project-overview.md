@@ -20,7 +20,7 @@ Summary of what we verified on a real X-A5 (firmware 1.21). Details are in the f
    WIRELESS COMMUNICATION. It is the DHCP server at `192.168.0.1`.
 2. Control uses TCP port 55740 with a Fuji variant of PTP/IP. The client sends an 82-byte init packet with a
    16-byte GUID and a client name. The camera accepts only GUIDs that start with the 12-byte prefix used by
-   existing open-source tools. Random GUIDs get Init Fail `0x201d`. The client name does not matter.
+   existing open-source tools. Random GUIDs get Init Fail `0x201d`. The camera seems to accept only the client name it registered last, until the user presses "change" on it.
 3. After the ack the socket carries USB-style PTP containers. OpenSession works at once.
 4. The client reads the Fuji event property `0xD212`, sets client state `0xDF01` to 5 (remote mode) and the
    remote version `0xDF24` to `0x2000C`, then calls InitiateOpenCapture `0x101C`.
@@ -61,7 +61,7 @@ client and a path into libgphoto2. See the [prior art survey](findings/2026-10-0
 | `scripts/` | probe tools and the Wi-Fi wrapper |
 | `tests/fake_camera/` | fake camera used to test scripts without hardware |
 | `captures/`, `artifacts/` | raw evidence and downloaded tools, git-ignored |
-| `src/` | created when plan 07 starts building the client |
+| `src/fuji_xa/` | Python library and `fuji-xa` command (plan 07). `preview` ran on the real camera, `shoot` and `download` not yet |
 
 ## Version control
 

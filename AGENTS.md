@@ -62,7 +62,9 @@ scripts/                       probe tools: fuji_hello_probe.py, fuji_session_pr
                                fuji_remote_probe.py, with_camera_wifi.sh
 tests/fake_camera/             test double that speaks the protocol on 127.0.0.1
 captures/, artifacts/          raw logs, manual, tools (git-ignored)
-src/                           created by plan 07
+src/fuji_xa/                   Python library and `fuji-xa` command (run with PYTHONPATH=src, no install)
+tests/test_fake_camera.py      library test against the fake camera: python3 tests/test_fake_camera.py
+pyproject.toml                 package metadata, no license field until the owner decides
 ```
 
 ## How to work

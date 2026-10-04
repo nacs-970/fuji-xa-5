@@ -14,7 +14,7 @@ the evidence layout.
 - The official app controls the camera over **Wi-Fi**. The camera's access point is open, and TCP port
   55740 accepts connections. libgphoto2's experimental `Fuji X (WLAN)` driver is **rejected at the
   handshake** (Init Fail, reason `0x201d`) because it sends a random GUID. The camera accepts the fixed GUID
-  that open-source tools use, with any client name. With that GUID a **PTP session opens and DeviceInfo reads
+  that open-source tools use, and a client name. The camera seems to accept only the name it registered last (a different name was refused until the owner pressed "change" on the camera; see the [library finding](docs/findings/2026-10-05-library-first-real-run.md)). With that GUID a **PTP session opens and DeviceInfo reads
   over Wi-Fi** (our script), while libgphoto2 still fails because it sends a second init packet after the ack.
   See [session finding](docs/findings/2026-10-04-wifi-session-probe.md). See [handshake finding](docs/findings/2026-10-04-wifi-gphoto2-handshake-failure.md).
 - **Remote mode and live view work.** Our `scripts/fuji_remote_probe.py` set remote mode, started open
@@ -64,8 +64,8 @@ docs/
 scripts/                       probe tools written for the plans (own code); `with_camera_wifi.sh` runs one command per fresh Wi-Fi join
 captures/                      raw logs and pcap files, git-ignored (see captures/README.md)
 artifacts/                     APKs, firmware, decompiler output, git-ignored (see artifacts/README.md)
-src/                           created by plan 07 when there is something to build
-tests/                         fake camera test double (`tests/fake_camera/`); pcap replay comes with plan 07
+src/fuji_xa/                   Python library and `fuji-xa` command (preview, shoot, download). Fake-camera tested. `preview` ran on the real camera ([finding](docs/findings/2026-10-05-library-first-real-run.md)); `shoot` and `download` not yet
+tests/                         fake camera test double (`tests/fake_camera/`) and `tests/test_fake_camera.py`; pcap replay comes with plan 07
 ```
 
 ## Working rules
