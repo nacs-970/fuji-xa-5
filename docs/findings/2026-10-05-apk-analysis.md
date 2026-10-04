@@ -39,6 +39,8 @@ appears as a constant in the Java (`ControlFFIR`, `MainActivity`, `BTManagerServ
 - **Touch focus is `LockS1Lock` with one integer made from those four bytes** (aspect width, aspect height, column, row, in
   that order, as one 32-bit number). The app builds it from hex strings and reads it back with radix 16, which gives the
   same layout as `0xD17C`. Letting go is `UnlockS1Lock` with no argument, which matches what we sent in runs 38 to 43.
+- Property `0xD209` (53769) is the **S1 lock colour**: the app draws the focus frame white for 0, green for 1 (focused) and
+  red for 2 (focus failed), and treats 1 as the camera having locked focus. libgphoto2's "AF status" name for it comes from USB.
 - The native names are `FTL_PTP_LockS1Lock` and `FTL_PTP_UnlockS1Lock`. Which PTP operation they send, and whether the
   integer travels as a PTP parameter or in a data phase, is **not known**: that is native code, not read.
 
@@ -102,8 +104,8 @@ one PTP operation through the same generic send routine. What they send, in our 
 The same method for the rest of the exported `FTL_PTP_*` functions of `libFTLPTPIP.so` (arm64): a small script read the
 operation code that is loaded before the call to the generic send routine, the data direction and the parameter count.
 "Not read" means the script could not find the parameter count, not that there is none. Listings: `/media/d/fuji-xa-5-artifacts/disasm/`.
-Not disassembled on purpose: `FmSendObject`, `FmSendObjectInfo`, `FmSendPartialObject` (firmware-style file send, we never
-send those), `GetDeviceInfo` (a large parser) and `VendorExtensionOperation` (a generic hook).
+Not disassembled at first: `FmSendObject`, `FmSendObjectInfo`, `FmSendPartialObject` (read later, see "The firmware functions"),
+`GetDeviceInfo` (a large parser) and `VendorExtensionOperation` (a generic hook).
 
 | App function | Operation | Parameters | Data |
 |--------------|-----------|------------|------|
@@ -137,6 +139,33 @@ What follows from it:
   video port. The format of the 18-byte frame header is not decoded here (that code is in the receiver thread, not read).
   The next camera run records the headers to see which bytes change.
 - The `OpenSession` wrapper also calls `CloseSession`, perhaps to clear a session left open. Not confirmed.
+
+## More native functions, and the firmware functions (owner: "disassemble the forbidden one too", 2026-10-05)
+
+Reading only, nothing sent to the camera. The listings stay in `/media/d/fuji-xa-5-artifacts/disasm/` (git-ignored).
+`libFFIR.so` builds some operations itself and not through the `FTL_PTP_*` functions, so a scan of both libraries for
+operation codes in `0x9000` to `0x90ff` found these (the full table is in the [protocol notes](../protocol/wifi.md), section 6):
+`0x9022` GetPostview (no parameters, data in), `0x9023` to `0x9025` zoom (step, start, stop), `0x9040` to `0x9042` firmware.
+
+**The firmware functions.** `FmSendObjectInfo` is `0x9040`, `FmSendObject` is `0x9041` and `FmSendPartialObject` is `0x9042`.
+"Fm" is firmware: the Java class that calls them is the app's firmware-update screen. Its order is: set the client state
+`0xDF01` to 19, read and write the version property `0xDF27` (value 1), send the object info (the file name `FUP_FILE.DAT`
+and its size), then the file in pieces. We never send these, and AGENTS.md now lists them. The app's model list marks the
+X-A5 with "remote firmware update: no" and "remote release: no" (the second matches what we found: no shutter by Bluetooth).
+
+**What we can change, from the code.**
+- **Our start already matches the app.** After the client state it reads the remote version `0xDF24` and writes `0x2000C`
+  (131084), the same value the app uses when its model list has no entry for the camera, which holds for the X-A5. So a
+  missing version handshake is not what leaves the buttons dead or the screen black.
+- **Postview (`0x9022`)** could show the shot at once without downloading the 6 MB file. A read, not tried.
+- **The step operations** act on the shutter speed `0xD240`, the F-number `0x5007` and the exposure bias `0x5010`. The
+  Java side sends 0 for the left button of the app's ring and 1 for the right one. Whether right raises the value is not
+  known: a test reads the property before and after.
+- **Zoom** (`0x9023` to `0x9025`) with two parameters for step and start. Only useful with a power-zoom lens. Not tried.
+- **Movies** (`0x9020`, `0x9021`): the Java side passes nothing, the native code gets its two parameters from a stored
+  setting. The "movie" and "still" modes appear as the values `0x6011` and `0x6001` inside the app. Not tried, writes to the card.
+- Focus lock: no AF-C case in the app's S1 code. When the colour property turns 1 the app only records that the camera is
+  locked, so our repeat-the-lock approach (runs 48 and 49) is our own, not the app's.
 
 ## Open questions
 

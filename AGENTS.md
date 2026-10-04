@@ -35,8 +35,9 @@ The camera is real hardware owned by the user. A wrong write can freeze it or ch
 
 1. Read-only first. Ask the owner before any step that changes camera state, writes to the SD card, sends
    a vendor command, installs software or downloads a binary. The plans mark these steps **GATE**.
-2. Never send Fuji operations `0x900c`, `0x900d` or `0x901d`. They write firmware files
-   ([finding](docs/plans/02-usb-unknown-vendor-ops.md)).
+2. Never send Fuji operations `0x900c`, `0x900d` or `0x901d` (USB), or `0x9040`, `0x9041` or `0x9042` (Wi-Fi). They
+   write firmware files ([USB finding](docs/plans/02-usb-unknown-vendor-ops.md), [Wi-Fi finding](docs/findings/2026-10-05-apk-analysis.md)).
+   Never write `0xDF01` = 19 (firmware transfer mode) and never send `0x100B` (DeleteObject).
 3. Taking a photo needs a fresh yes from the owner for that run. Earlier approval for live view does not
    cover it.
 4. One test = one fresh Wi-Fi join: connect, run once, reconnect. Use the wrapper, not a loop:
