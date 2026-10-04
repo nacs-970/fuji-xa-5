@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+# No license field on purpose: the owner has not decided the license yet (docs/plans/07-implementation.md).
+[project]
+name = "fuji-xa"
+version = "0.0.1"
+description = "Live view, shutter and download for Fujifilm X-A cameras over Wi-Fi"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+fuji-xa = "fuji_xa.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

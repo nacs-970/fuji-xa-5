@@ -18,7 +18,8 @@ import time
 GUID_PREFIX = bytes.fromhex("ada5485d87b27f0bd3d5ded0")  # the camera checks the first 12 bytes
 HOST = "127.0.0.1"
 FAKE_JPEG = b"\xff\xd8\xff\xe0" + bytes(range(256)) * 4500 + b"\xff\xd9"   # about 1.1 MB, two chunks
-state = {"client_state": 2, "remote_ver": 0x20006, "capture_open": False, "objects": 3, "view": False}
+state = {"client_state": 2, "remote_ver": 0x20006, "capture_open": False, "objects": 3, "view": False,
+         "events": None}
 
 
 def listen(port):
@@ -61,9 +62,20 @@ def video_server():
 def event_server():
     srv = listen(55741)
     c, _ = srv.accept()
+    state["events"] = c
     time.sleep(10)
     c.close()
     srv.close()
+
+
+def announce_shot(c):
+    """The three 28-byte events the X-A5 sent after a shot: ObjectAdded, 0xC001, CaptureComplete."""
+    for code in (0xC004, 0xC001, 0x400D):
+        time.sleep(0.1)
+        try:
+            c.sendall(struct.pack("<IHHI", 28, 4, code, 1) + struct.pack("<IIII", 0x0E, 0x0E, 0, 0))
+        except OSError:
+            return
 
 
 def handle(c):
@@ -97,6 +109,8 @@ def handle(c):
         elif code == 0x100E:
             if state["capture_open"]:
                 state["objects"] += 1
+                if state["events"]:
+                    threading.Thread(target=announce_shot, args=(state["events"],), daemon=True).start()
             c.sendall(container(3, 0x2001, tid))
         elif code == 0x1015:
             prop = params[0]
