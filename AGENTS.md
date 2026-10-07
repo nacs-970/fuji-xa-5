@@ -22,10 +22,10 @@ Wi-Fi. The next steps are a clean client in `src/` and a libgphoto2 patch.
   destructive git operation. To compare an old version, use `git show <rev>:<path>` or clone to a temp dir.
 - `captures/` and `artifacts/` are git-ignored on purpose. Never force-add them. They can hold the camera
   serial number and Fuji material. Do not commit a Fuji binary, APK, firmware or decompiled code.
-- Do not add a `LICENSE` file until the owner decides the license (see
-  [plan 07](docs/plans/07-implementation.md)).
-- Exception: `docs/artifacts/x-a5-manual/` (Fuji's X-A5 manual) is meant to be committed. The owner decided
-  this. Put nothing else from Fuji in `docs/artifacts/`.
+- The code is MIT (`LICENSE`, decided 2026-10-08). Do not copy code from a project whose licence does not allow it.
+- Fuji's X-A5 manual is not committed (owner decision, 2026-10-08). A local copy lives in the git-ignored
+  `artifacts/x-a5-manual/`. Cite the official PDF in `docs/references.md` instead. Put nothing else from Fuji in
+  the tracked tree.
 - The branch is `master`. The remote `origin` is the private GitHub repo `nacs-970/fuji-xa-5`. Push only when
   the owner asks. Do not rename the branch, make the repo public or add a tag unless asked.
 
@@ -56,7 +56,6 @@ docs/project-overview.md       what the project is, how it works, where it stand
 docs/plans/                    what to do (one file per plan, 00-overview.md first)
 docs/findings/                 what happened (dated, one per experiment)
 docs/protocol/                 clean-room protocol notes in our own words
-docs/artifacts/x-a5-manual/    owner's manual (PDF and text), published on purpose, see legal doc
 docs/legal-and-clean-room.md   what may be committed
 docs/references.md             upstream projects and manuals
 scripts/                       probe tools: fuji_hello_probe.py, fuji_session_probe.py,
@@ -65,7 +64,7 @@ tests/fake_camera/             test double that speaks the protocol on 127.0.0.1
 captures/, artifacts/          raw logs, manual, tools (git-ignored)
 src/fuji_xa/                   Python library and `fuji-xa` command (run with PYTHONPATH=src, no install)
 tests/test_fake_camera.py      library test against the fake camera: python3 tests/test_fake_camera.py
-pyproject.toml                 package metadata, no license field until the owner decides
+pyproject.toml, LICENSE        package metadata, MIT licence
 ```
 
 ## How to work

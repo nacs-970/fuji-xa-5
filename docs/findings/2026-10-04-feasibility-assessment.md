@@ -23,7 +23,7 @@ but is no longer updated?
   Capture on macOS), and PC AutoSave as a wireless-LAN feature. So these operations may belong to the
   picture-download software, or to nothing the manual documents. Identifying them means sending vendor
   commands (plan 02, needs approval).
-- **Source (full manual text, `docs/artifacts/x-a5-manual/`):** the manual's USB chapter lists no USB-mode
+- **Source ([official manual PDF](https://fujifilm-dsc.com/en/manual/x-a5/x-a5_omw_en_s_f.pdf); the owner keeps a local text copy, not in the repo):** the manual's USB chapter lists no USB-mode
   menu item and no tether or live-view use. That makes extra USB modes less likely than assumed when
   plan 01 was written.
 

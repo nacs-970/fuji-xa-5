@@ -22,9 +22,9 @@ app.
 
 `.gitignore` already keeps `captures/` and `artifacts/` out of git. Do not work around it.
 
-One exception, decided by the owner on 2026-10-04: the X-A5 owner's manual, as the original PDF and a text
-conversion, is kept in `docs/artifacts/x-a5-manual/` and is published with the repo. Fuji owns that
-text. Remove the folder if Fuji or the owner asks. Nothing else from Fuji goes into `docs/artifacts/`.
+The X-A5 owner's manual is not kept in the repo, neither the PDF nor a text conversion (owner decision,
+2026-10-08). Fuji owns that text, and a full extraction is not a short quote. Keep your own copy in the
+git-ignored `artifacts/x-a5-manual/` and cite the official PDF in `docs/references.md`.
 
 ## Clean-room practice
 
