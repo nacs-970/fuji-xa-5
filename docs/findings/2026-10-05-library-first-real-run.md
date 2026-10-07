@@ -451,9 +451,12 @@ the last "down") were tried in run 48:
   0.9 s) the camera sent no live-view frame for 5 s, then did not answer the close. The owner saw the camera show its normal
   live preview afterwards, not the black screen of every earlier session. The owner pressed nothing on the camera. It may be
   the repeated locks (17 locks for 4 releases, never seen before), or something else: one run only. If it comes back
-  with the 2 s repeat, the repeats are suspect. **Idea, not tried:** the black screen after a session may come from how we
-  close (`0x1018`, `0x1003`), since a session the camera ended itself left no black screen. Closing the sockets without them,
-  on purpose, would show it.
+  with the 2 s repeat, the repeats are suspect. **Correction to an idea I first wrote here:** the black screen does not come
+  from our closing operations. Run 25 closed the sockets without `0x1018` and `0x1003` and the screen stayed black. What
+  differs in run 48 is **who ended the session**: the camera did, as in runs 7, 23 and 26 (there after image view; the screen
+  came back, and in run 26 the buttons were dead until a power cycle). So the pattern so far is: a session the client ends
+  leaves the black screen, a session the camera ends brings the live view back. Whether the buttons worked after run 48 was
+  not asked.
 - `serve` does not say when its reading thread stops: it ends silently on the first error. Not changed.
 
 Run 49 (the page repeats every 2 s, `?every=1` and `?every=3` tried in one session):
@@ -465,8 +468,8 @@ Run 49 (the page repeats every 2 s, `?every=1` and `?every=3` tried in one sessi
 - **The drop of run 48 did not come back** (one 120 s session, 23 holds, the same repeated locks), so it is not shown to
   come from them.
 - **The black screen came back after this normal close**, and run 48's session, which the camera ended itself, left the
-  live preview. That fits the idea that our close (`0x1018`, `0x1003`) leaves the black screen, but it is two sessions.
-  Still not tried on purpose.
+  live preview. This fits the pattern in the correction above (client-ended: black, camera-ended: live view), not an effect
+  of our close operations, which run 25 ruled out.
 - Red was not seen again.
 
 ## Postview (run 50)
@@ -493,6 +496,11 @@ view). The picture was out of focus because no focus lock was sent before the sh
 - **Run 54: shot, postview, shot, postview, end.** Both postviews came back, the second shot was not answered busy this time
   (in runs 50 to 52 shots 2 and 3 were), and the session ended without a download. Whether the postview read in between
   is what avoids the busy answer, or the pause it adds, was not isolated: one run.
+- **A Shoot button on the `serve` page** (`fuji-xa serve --shoot`, after run 54): it locks focus at the square, waits up to
+  3 s for green, releases the shutter, shows the postview under the preview and lets go of the lock. It only exists with
+  `--shoot` and its request needs a header (`X-Fuji: 1`) that another web page cannot send, because it writes to the SD
+  card. Fake camera and page-script tested, not yet on the camera. A real run would also show whether the photo's
+  `FocusPixel` lands on the chosen cell.
 - **Can the postview size be changed? Not known.** `0x9022` takes no parameter, and the official app has no setting for it
   (its receive buffer is a fixed 12 MB). The postview has the live view's size, 640 x 480 with bars. libgphoto2 lists a
   16-bit property `0xD174`, "live view size", with 1 = XGA, 2 = VGA and 3 = QVGA, for USB cameras (X-T3). It is not in the

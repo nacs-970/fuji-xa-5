@@ -3,13 +3,14 @@
 const fs = require("fs");
 const els = {};
 const mk = () => ({style: {}, clientWidth: 640, getBoundingClientRect: () => ({left: 0, top: 0}), addEventListener() {}});
-for (const id of ["f", "img", "pt"]) els[id] = mk();
+for (const id of ["f", "img", "pt", "s", "shot", "shotbox"]) els[id] = mk();
 let states = [], t = 0;
 const timers = [];
 const posts = [];
 const ctx = {
   document: {getElementById: id => els[id]},
-  fetch: async (url, opts) => { if (opts) posts.push(url); return {json: async () => states.shift() || {}}; },
+  fetch: async (url, opts) => { if (opts) posts.push(opts.headers ? url + " " + JSON.stringify(opts.headers) : url); return {status: 200, blob: async () => "img", json: async () => states.shift() || {}}; },
+  URL: {createObjectURL: b => "blob:" + b}, alert: m => { throw new Error(m); },
   addEventListener() {}, setInterval: (fn, ms) => timers.push(fn), Date: {now: () => t}, console, location: {search: ""}, URLSearchParams,
   Promise, Math, Array,
 };
@@ -50,4 +51,13 @@ const step = async (label, s, expect) => {
   const ok = held === "/focus/down /focus/down /focus/up";
   console.log((ok ? "ok   " : "FAIL ") + "held button repeats down, then up:", held);
   if (!ok) process.exitCode = 1;
+  // the Shoot button: hidden unless the server says "shoot", posts with the X-Fuji header, shows the picture it gets back
+  await step("server without --shoot", {col: 3, row: 3, af: 0}, {colour: "#fff", col: 3, row: 3});
+  const hidden = els.s.hidden;
+  states = [{...base, col: 3, row: 3, af: 0, shoot: true}]; await ctx.refresh();
+  posts.length = 0;
+  els.s.onclick(); await tick(); await tick();
+  const ok2 = hidden === true && els.s.hidden === false && posts.join(" ") === '/shoot {"X-Fuji":"1"}' && els.shot.src === "blob:img" && els.shotbox.hidden === false && els.s.disabled === false;
+  console.log((ok2 ? "ok   " : "FAIL ") + "shoot button:", hidden, els.s.hidden, posts.join(" "), els.shot.src, els.s.disabled);
+  if (!ok2) process.exitCode = 1;
 })();

@@ -19,7 +19,9 @@ PAGE = b"""<!doctype html><meta charset="utf-8"><title>fuji-xa</title>
 <div id=wrap style="position:relative"><img id=img src="/stream" draggable=false style="width:100%;display:block">
 <div id=pt style="position:absolute;border:3px solid #fff;box-shadow:0 0 0 1px #000,inset 0 0 0 1px #000;box-sizing:border-box;pointer-events:none;display:none"></div></div>
 <p style="margin:8px">Click the picture to focus there, or hold <b>Space</b> or the button to focus at the square. White: not focused. Green: focused. Red: focus failed. The lens keeps its focus when you let go.
-<button id=f style="font-size:20px;padding:8px 24px">Focus</button></p>
+<button id=f style="font-size:20px;padding:8px 24px">Focus</button>
+<button id=s hidden style="font-size:20px;padding:8px 24px">Shoot</button></p>
+<p id=shotbox hidden style="margin:8px">The shot just taken (the camera's small postview picture, the full file is on the card):<br><img id=shot style="max-width:50%"></p>
 <script>
 let down = false, query = "", chain = Promise.resolve(), area = null;   // "up" is sent only after "down" was answered
 const post = path => { chain = chain.then(() => fetch(path, {method: "POST"})).catch(() => {}); };
@@ -35,6 +37,16 @@ setInterval(() => {
 }, every);
 const f = document.getElementById("f"), img = document.getElementById("img"), pt = document.getElementById("pt");
 f.onpointerdown = () => press(true);
+const shootButton = document.getElementById("s"), shot = document.getElementById("shot");
+shootButton.onclick = async () => {   // focus at the square, release the shutter (WRITES TO THE SD CARD), show the postview
+  shootButton.disabled = true;
+  try {
+    const r = await fetch("/shoot", {method: "POST", headers: {"X-Fuji": "1"}});   // a header no other web page can send
+    if (r.status === 200) { shot.src = URL.createObjectURL(await r.blob()); document.getElementById("shotbox").hidden = false; }
+    else if (r.status !== 204) alert("shot failed: " + r.status + " " + r.statusText);
+  } catch (e) { alert("shot failed: " + e); }
+  shootButton.disabled = false;
+};
 for (const e of ["pointerup", "pointerleave", "pointercancel"]) f.addEventListener(e, () => press(false));
 addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault(); press(true); } });
 addEventListener("keyup", e => { if (e.code === "Space") press(false); });
@@ -57,6 +69,7 @@ const COLOURS = ["#fff", "#0f0", "#f00"];
 async function refresh() {
   try {
     const s = await (await fetch("/state")).json();
+    shootButton.hidden = !s.shoot;   // the button shows only when the server was started with --shoot
     if (!s.col) return;
     last = s;
     if (pending && ((s.col === pending.col && s.row === pending.row) || Date.now() - pending.t > 2000)) pending = null;
@@ -78,7 +91,7 @@ img.onpointerup = img.onpointerleave = img.onpointercancel = () => press(false);
 </script>"""
 
 
-def serve(cam, host, port, seconds=None):
+def serve(cam, host, port, seconds=None, shoot=False):
     """Live view as an MJPEG stream: open http://HOST:PORT/ in a browser. Runs until Ctrl-C or `seconds`.
 
     The page shows the camera's focus point as a square (property 0xD17C, read ten times a second): white until the
@@ -86,10 +99,12 @@ def serve(cam, host, port, seconds=None):
     to focus there (Camera.focus with a cell, worked on the X-A5, run 46), or hold the Focus button or Space to focus at the
     square again (a lock without a cell would move the point to the centre).
 
-    ponytail: no login, and several viewers share the frames (each sees a part). Any local web page can press Focus. Keep
-    HOST on 127.0.0.1.
+    `shoot=True` adds a Shoot button: focus at the square, release the shutter (WRITES TO THE SD CARD), show the postview.
+
+    ponytail: no login, and several viewers share the frames (each sees a part). Any local web page can press Focus. Shoot
+    needs a header (X-Fuji: 1) that other web pages cannot send. Keep HOST on 127.0.0.1.
     """
-    stop, failed, hold = threading.Event(), [], []
+    stop, failed, hold, shooting = threading.Event(), [], [], threading.Lock()
 
     def let_go():
         for timer in hold:
@@ -100,6 +115,19 @@ def serve(cam, host, port, seconds=None):
     def finish():
         stop.set()
         srv.shutdown()
+
+    def take_photo():
+        """Lock focus at the square, wait up to 3 s for green, shoot, return the postview (b"" if none), let go."""
+        point = cam.props.get(P_FOCUS_POINT)
+        cam.focus((point >> 8 & 255, point & 255) if point else None)
+        end = time.time() + 3
+        while cam.props.get(P_FOCUS_COLOUR) != 1 and time.time() < end:   # poll() keeps the colour fresh
+            time.sleep(0.1)
+        try:
+            cam.shoot()   # released even if focus never turned green: the photo is what was asked for
+            return cam.postview()
+        finally:
+            cam.release_focus()
 
     def poll():   # keep the focus point fresh for the page
         while not stop.wait(0.1):
@@ -114,6 +142,8 @@ def serve(cam, host, port, seconds=None):
                 point = cam.props.get(P_FOCUS_POINT)
                 state = {} if point is None else {"aw": point >> 24, "ah": point >> 16 & 255, "col": point >> 8 & 255,
                                                    "row": point & 255, "cols": GRID[0], "rows": GRID[1], "af": cam.props.get(P_FOCUS_COLOUR, 0)}
+                if shoot:
+                    state["shoot"] = True
                 body = json.dumps(state).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -162,6 +192,22 @@ def serve(cam, host, port, seconds=None):
                     hold.append(timer)
                 elif url.path == "/focus/up":
                     let_go()
+                elif url.path == "/shoot" and shoot:
+                    if self.headers.get("X-Fuji") != "1":
+                        return self.send_error(403)
+                    if not shooting.acquire(blocking=False):
+                        return self.send_error(409, "a shot is already in progress")
+                    try:
+                        view = take_photo()
+                    finally:
+                        shooting.release()
+                    self.send_response(200 if view else 204)
+                    if view:
+                        self.send_header("Content-Type", "image/jpeg")
+                        self.send_header("Content-Length", str(len(view)))
+                    self.end_headers()
+                    self.wfile.write(view)
+                    return
                 else:
                     return self.send_error(404)
             except (FujiError, OSError, ValueError) as exc:
@@ -205,6 +251,7 @@ def main(argv=None):
     p.add_argument("--host", default="127.0.0.1", help="address to listen on (no login, keep it local)")
     p.add_argument("--port", type=int, default=8080, help="port to listen on")
     p.add_argument("--seconds", type=float, help="stop after this long (default: until Ctrl-C)")
+    p.add_argument("--shoot", action="store_true", help="add a Shoot button to the page: it releases the shutter (WRITES TO THE SD CARD) and shows the postview")
     sub.add_parser("props", help="print the properties the camera reports, with current values (read-only, no photo)")
     p = sub.add_parser("set", help="write one camera setting and read it back (CHANGES CAMERA STATE). The X-A5 refused the F-number and shutter speed, and accepted the focus point (0xD17C) without using it")
     p.add_argument("prop", type=lambda x: int(x, 0), help="property code from `props`, for example 0x5007")
@@ -235,7 +282,7 @@ def main(argv=None):
                 return 0
             if a.cmd == "serve":
                 cam.start_live()
-                serve(cam, a.host, a.port, a.seconds)
+                serve(cam, a.host, a.port, a.seconds, a.shoot)
                 return 0
             if a.cmd == "props":
                 cam.start_live()   # the settings appear in the change list only after remote mode starts

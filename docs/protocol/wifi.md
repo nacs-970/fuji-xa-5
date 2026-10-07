@@ -291,10 +291,44 @@ Speed: about 5 MB/s. A 6 to 7 MB full-size JPEG took 1.2 to 1.4 s.
 
 ## 9. What is not known or not done
 
-- Manual focus, and whether the lens already moves in live view. Autofocus and the focus point are solved: `0x9026` with a cell (runs 45 and 46). DeviceInfo does not list `0x9026` and `0x9027`, but it does not list the working `0x100E` either (run 29).
-- Vendor operation `0x902B` (no parameters, a read) returns the descriptions of 10 properties with ranges and allowed values (run 45, see the property table notes in section 4); the standard `GetDevicePropDesc` is still refused. Movies (`0x9020` start, `0x9021` stop) are not tried either ([APK finding](../findings/2026-10-05-apk-analysis.md)).
-- What the `0xC001` event parameter is, and what `0xD222` counts.
-- Why one init with the accepted prefix was rejected once.
-- The allowed values of the camera settings, and how to set them (ISO, aperture, shutter speed, white balance, film simulation, exposure compensation). Movies, thumbnails.
-- Whether other X-A bodies behave the same.
+Status as of run 54 (2026-10-05). The next camera tests are in [plan 08](../plans/08-next-camera-tests.md).
+
+**Focus**
+- What the camera does when focusing fails. `0xD209` = 2 (red in the app) has never been seen; a plain wall left it at 0.
+- Whether the repeated lock (runs 48 and 49) is safe over a long session. Run 48's session ended by itself about 5 s after
+  a release; run 49 did not repeat it.
+- AF-C: one lock is one focus. The repeat every 1 to 3 s makes the lens follow, and the preview stutters while the camera
+  focuses. No true continuous autofocus is known. `0x500A` reads the same in AF-S and AF-C.
+- Why green lags the beep: the camera answers the property-list read late while it focuses (0.6 to 2.5 s). Reading `0xD209`
+  alone during a focus is not tried.
+- What `0xD245` (the app calls it AF select mode; its value never changed), `0xD019` and `0x5012` mean.
+- The grid and the layout for other aspect ratios (16:9, 1:1), and what the camera answers for a cell outside the valid area.
+- Whether a photo taken after a lock at a cell has its `FocusPixel` at that cell (the `serve --shoot` page would show it).
+
+**The camera body and the end of a session**
+- Why the buttons, dials and shutter are dead during a session, and why they stay dead after some endings.
+- Who ends the session decides what the screen does: a session the client ends leaves the black screen; one the camera ends
+  (runs 7, 23, 26, 48) brings the live view back. The buttons after run 48's end were not checked. Closing operations are
+  not the cause (run 25). `0xDF01` = 7 (the app's abort notice) as an ending is not tried. Writing the start value 16 back
+  made things worse (run 17): do not repeat it.
+- Image view is one way in a session; setting remote mode again from it makes the camera drop the connection and leaves its buttons dead.
+
+**Settings**
+- F-number and shutter-speed writes are refused. The step operations `0x902C`, `0x902D` and `0x902E` are not tried, and which
+  of the parameters 0 and 1 raises the value is not known.
+- ISO, white balance, film simulation, drive mode and exposure compensation writes are not tried. The read/write flags in `0x902B` are not reliable.
+- Manual focus, and whether the lens already moves in live view.
+
+**Operations not tried**
+- Movies (`0x9020`, `0x9021`): the start parameters are not known. Zoom (`0x9023` to `0x9025`): parameters not known, needs a power-zoom lens. Cancel capture `0x9030`, thumbnail `0x100A`.
+- `0x9040` to `0x9042` are the firmware update: never send them.
+
+**Pictures**
+- How long the postview stays available, whether it works right after `InitiateCapture`, and whether reading it is what avoids the busy answer (`0x2019`) to the next shot. Its size cannot be changed (`0xD174` and `0xD173` answer `0x200A`).
+- What the `0xC001` event parameter is, and what `0xD222` counts. Why one init with the accepted prefix was rejected once.
 - Whether `0xDF24` = `0x2000C` and `0xD227` are needed on the X-A5 (we always sent them).
+
+**The project**
+- Whether other X-A bodies behave the same (only the X-A5 is tested), whether the library runs off Linux, the licence, the
+  libgphoto2 patch (not started), a Wi-Fi capture of the official app (plan 04, not done), and the official app's own polling interval (not found).
+- The fake camera is built from our logs, so passing its tests shows our sequencing, not that the camera agrees.

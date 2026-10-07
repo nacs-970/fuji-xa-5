@@ -107,11 +107,14 @@ def free_port():
         return probe.getsockname()[1]
 
 
-def post(port, path):
-    """POST with no body. Returns the status line."""
-    with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
-        s.sendall(f"POST {path} HTTP/1.0\r\nContent-Length: 0\r\n\r\n".encode())
-        return s.recv(4096).split(b"\r\n")[0]
+def post(port, path, headers="", body=False):
+    """POST with no body. Returns the status line (and the reply body with body=True)."""
+    with socket.create_connection(("127.0.0.1", port), timeout=15) as s:
+        s.sendall(f"POST {path} HTTP/1.0\r\nContent-Length: 0\r\n{headers}\r\n".encode())
+        data = b""
+        while chunk := s.recv(65536):
+            data += chunk
+        return data.split(b"\r\n\r\n", 1) if body else data.split(b"\r\n")[0]
 
 
 def test_serve():
@@ -207,9 +210,45 @@ def test_focus():
         fake.wait()
 
 
+def test_shoot_button():
+    """The Shoot button's server side: focus at the square, shoot, return the postview. Needs --shoot and the X-Fuji header."""
+    fake = subprocess.Popen([sys.executable, os.path.join(HERE, "fake_camera", "fake_fuji_camera.py")],
+                            stdout=subprocess.PIPE, text=True)
+    try:
+        assert "listening" in fake.stdout.readline()
+        with Camera("127.0.0.1") as cam:
+            cam.start_live()
+            cam.events()
+            port = free_port()
+            server = threading.Thread(target=serve, args=(cam, "127.0.0.1", port, 12, True))
+            server.start()
+            fetch(port, "/")
+            assert json.loads(fetch(port, "/state").split(b"\r\n\r\n", 1)[1])["shoot"] is True
+            assert b" 403 " in post(port, "/shoot")                       # another web page cannot send the header
+            head, view = post(port, "/shoot", "X-Fuji: 1\r\n", body=True)
+            assert b" 200 " in head.split(b"\r\n")[0] and view[:2] == b"\xff\xd8", head   # the postview of the shot
+            assert cam.events()[0xD209] == 0                              # focus was let go after the shot
+            assert b" 200 " in post(port, "/shoot", "X-Fuji: 1\r\n")   # a second shot gives a postview too
+            server.join(20)
+            assert not server.is_alive()
+        with Camera("127.0.0.1") as cam:                                  # without --shoot there is no such page
+            cam.start_live()
+            port = free_port()
+            server = threading.Thread(target=serve, args=(cam, "127.0.0.1", port, 3))
+            server.start()
+            fetch(port, "/")
+            assert b" 404 " in post(port, "/shoot", "X-Fuji: 1\r\n")
+            assert "shoot" not in json.loads(fetch(port, "/state").split(b"\r\n\r\n", 1)[1])
+            server.join(10)
+    finally:
+        fake.kill()
+        fake.wait()
+
+
 if __name__ == "__main__":
     test_live_shoot_download()
     test_serve()
     test_focus()
+    test_shoot_button()
     test_page_script()
     print("ok")
