@@ -46,7 +46,7 @@ The protocol is documented in [protocol/wifi.md](protocol/wifi.md).
 | libgphoto2 `Fuji X (WLAN)` driver | fails: random GUID, and a second init after the ack |
 | Settings (ISO, aperture, film simulation) | not started |
 | Native analysis with Ghidra/REA | not run, tools not installed ([plan 06](plans/06-ghidra-rea-native-analysis.md)) |
-| The official app's code (APK, jadx, `llvm-objdump`) | read ([finding](findings/2026-10-05-apk-analysis.md)): focus-point parameter, `0x902B`, vendor operation table (postview `0x9022` works, runs 50 and 51, with `fuji-xa shoot --postview`; zoom, step operations and movies are not tried). `0x9040` to `0x9042` are the firmware update: never send them |
+| The official app's code (APK, jadx, `llvm-objdump`) | read ([finding](findings/2026-10-05-apk-analysis.md)): focus-point parameter, `0x902B`, vendor operation table (postview `0x9022` works, runs 50 and 51, with `fuji-xa shoot --postview` (and a Shoot button on `serve --shoot`, fake camera only so far); zoom, step operations and movies are not tried). `0x9040` to `0x9042` are the firmware update: never send them |
 
 The goal is not new. [libfuji](https://github.com/petabyt/libfuji) and its app Fudge already cover this
 protocol on other bodies. Nobody found names the X-A5. Our contribution is X-A5 evidence, a small clean
@@ -82,7 +82,7 @@ The repo uses git. Rules are in [AGENTS.md](../AGENTS.md#version-control-use-git
 3. **libgphoto2 patch**: fixed GUID prefix and no second init after the ack. Test with
    `gphoto2 --camera "Fuji X (WLAN)" --port ptpip:192.168.0.1 --capture-preview`. Offer it upstream
    (issue 517).
-4. **Standalone client** in `src/` (language and license still to decide, see
+4. **Standalone client** in `src/` (Python, MIT licence, see
    [plan 07](plans/07-implementation.md)) with a pcap-replay test suite.
 5. **Other X-A bodies**: publish the test procedure so owners of X-A1, X-A2, X-A3 and X-A10 can report results.
 

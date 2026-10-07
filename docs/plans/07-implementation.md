@@ -76,15 +76,13 @@ tests/
 docs/protocol/      wifi.md and any usb notes, the source of truth for the code
 ```
 
-## Decisions for the owner (open)
+## Decisions for the owner
 
 | Decision | Options | Recommendation |
 |----------|---------|----------------|
-| License | LGPL-2.1-or-later (upstreamable into libgphoto2) vs MIT or Apache-2.0 (standalone) | LGPL-2.1-or-later if Branch 1 or 2. A permissive license only if Branch 3 and the owner wants it. |
+| License | LGPL-2.1-or-later (upstreamable into libgphoto2) vs MIT or Apache-2.0 (standalone) | **Decided 2026-10-08: MIT** (`LICENSE`). A libgphoto2 patch, if we send one, goes under that project's licence. |
 | Language for Branch 3 | C (matches libgphoto2), Python (fast to prototype), Rust (safe, single binary) | decide when Branch 3 starts |
 | Scope | X-A5 only vs a family of older X-A bodies | X-A5 first. Add other bodies only with a captured session from each. |
-
-Do not add a `LICENSE` file until this is decided.
 
 ## Testing
 

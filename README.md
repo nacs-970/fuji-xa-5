@@ -4,10 +4,47 @@ Goal: let a Linux PC (and later other platforms) take pictures and show live vie
 without the official smartphone app, which is no longer updated. The result must be open source and
 reusable for other older X-A bodies.
 
-Status: **research phase.** No implementation code exists yet. This repo holds the findings, the plans and
-the evidence layout.
+> **Unofficial. Use at your own risk.**
+>
+> - This project is not made, endorsed or supported by FUJIFILM Corporation. Fujifilm, X-A5 and Camera Remote are
+>   trademarks of their owners. The names only say which camera this works with. No Fuji code, firmware or app is in
+>   this repo.
+> - The protocol was found by watching the camera and reading the official app. Some of the commands we send are
+>   not documented by Fuji. We tested one X-A5 and nothing else. The software comes with no warranty.
+> - No lasting damage was seen, but a session can leave the camera odd: the screen stays black until you press the
+>   shutter once, and twice (runs 17 and 26 in the [finding](docs/findings/2026-10-05-library-first-real-run.md)) the
+>   camera needed a power cycle.
+> - `fuji-xa shoot` and the Shoot button of `fuji-xa serve --shoot` write pictures to the SD card.
+> - Never send the operations `0x9040`, `0x9041` and `0x9042`. They are the camera's firmware update. The library
+>   does not send them.
 
-## Where things stand (2026-10-04)
+Status: **experimental, works on one X-A5.** The `fuji-xa` library and command give live view, shutter, download,
+focus at a chosen point and the postview picture over Wi-Fi. It needs no Fuji software. The findings, the protocol
+notes and the plans are in `docs/`. The Shoot button of `serve --shoot` is tested on a fake camera only. Movies, zoom
+and the shutter speed, F-number and exposure steps are not tried.
+
+## Quick start
+
+Needs Python 3.10 or newer and no other package. `pip install .` installs the `fuji-xa` command, or run
+`PYTHONPATH=src python3 -m fuji_xa` from a clone.
+
+1. On the camera, open the **WIRELESS COMMUNICATION** screen. The camera's Wi-Fi network (an open one, named
+   `FUJIFILM-X-A5-` and four digits) only exists while that screen is shown.
+2. Join that network and run one command. [`scripts/with_camera_wifi.sh`](scripts/with_camera_wifi.sh) does both with
+   NetworkManager and goes back to your own network afterwards:
+   ```
+   scripts/with_camera_wifi.sh -- fuji-xa serve             # live view at http://127.0.0.1:8080/ (click the picture to focus)
+   scripts/with_camera_wifi.sh -- fuji-xa shoot -d pics     # takes one photo, saves it from the card to pics/
+   scripts/with_camera_wifi.sh -- fuji-xa props             # read-only: what the camera reports
+   ```
+3. Use one command per join: the camera tends to stop its Wi-Fi when a session ends. Keep your internet on another
+   connection (for example a USB tether) while the Wi-Fi card is on the camera network.
+4. The camera remembers one client name (`xa5-probe`, `--name` changes it). If a new name is refused, accept the change on
+   the camera.
+
+`fuji-xa --help` lists the commands. The commands that change the camera or the card say so in their help text.
+
+## Where things stand (2026-10-08)
 
 - Over USB, the X-A5 currently advertises **no capture operation**, and its manual lists no USB mode
   setting. See [baseline probe](docs/findings/2026-10-04-baseline-probe.md).
@@ -29,7 +66,7 @@ the evidence layout.
 - **The official app's code was read** (APK from the owner's phone, jadx and `llvm-objdump`, nothing sent to the camera,
   [finding](docs/findings/2026-10-05-apk-analysis.md)). It gave the focus-point parameter, the property descriptions
   (`0x902B`), and a table of the app's vendor operations in the [protocol notes](docs/protocol/wifi.md) section 6: postview
-  (`0x9022`: it returns the shot as a 640 x 480 JPEG in 0.04 s, then the download still works, runs 50 and 51; `fuji-xa shoot --postview` saves it), zoom, the step operations for shutter speed,
+  (`0x9022`: it returns the shot as a 640 x 480 JPEG in 0.04 s, then the download still works, runs 50 and 51; `fuji-xa shoot --postview` saves it; `fuji-xa serve --shoot` adds a Shoot button to the page that focuses at the square, takes a photo and shows the postview: fake camera only so far), zoom, the step operations for shutter speed,
   F-number and exposure bias, and movies, which are not tried yet. It also showed that `0x9040`, `0x9041` and `0x9042` are the **firmware update**
   operations: never send them ([AGENTS.md](AGENTS.md)). Our start already matches the app's version handshake.
 - The protocol is written down in [docs/protocol/wifi.md](docs/protocol/wifi.md) (clean-room, with a status on
@@ -37,8 +74,8 @@ the evidence layout.
 - The goal is **not new**: [libfuji](https://github.com/petabyt/libfuji) (MIT, C, active) and its Android app
   Fudge already implement Fuji's Wi-Fi protocol including a remote mode, tested on the X-A2 and X-H1. Nobody
   found names the X-A5. See [prior art survey](docs/findings/2026-10-04-prior-art-survey.md).
-- The REA/Ghidra native analysis has **not run**: Ghidra and a supported JDK are not installed.
-  See [feasibility assessment](docs/findings/2026-10-04-feasibility-assessment.md).
+- The Ghidra analysis (plan 06) has **not run**: Ghidra and a supported JDK are not installed. The app's native code was
+  read with `llvm-objdump` instead (see above). See [feasibility assessment](docs/findings/2026-10-04-feasibility-assessment.md).
 
 ## Useful tools
 
@@ -72,6 +109,7 @@ and the disk budget.
 | 05 | [APK static analysis](docs/plans/05-apk-static-analysis.md) | `jadx` | no | **done 2026-10-05** ([finding](docs/findings/2026-10-05-apk-analysis.md)) |
 | 06 | [Ghidra / REA native analysis](docs/plans/06-ghidra-rea-native-analysis.md) | Ghidra + JDK 21 | no | blocked: needs approval |
 | 07 | [Implementation](docs/plans/07-implementation.md) | depends | depends | waits for 03 to 06 |
+| 08 | [Next camera tests](docs/plans/08-next-camera-tests.md) | no | **vendor commands, a few photos** | not started: Shoot button, step operations, who ends the session |
 
 ## Repo layout
 
@@ -110,6 +148,5 @@ tests/                         fake camera test double (`tests/fake_camera/`) an
 
 ## License
 
-Not chosen yet. This is an open decision in [plan 07](docs/plans/07-implementation.md). Do not add a
-`LICENSE` file until it is decided, because the choice depends on whether the code goes upstream into
-libgphoto2 (LGPL-2.1-or-later) or ships as a standalone project.
+[MIT](LICENSE), decided 2026-10-08. It covers our code and notes. It does not cover Fuji's app, firmware, manual
+or trademarks, none of which are in this repo. A libgphoto2 patch, if we send one, goes under that project's licence.
