@@ -72,7 +72,7 @@ The repo uses git. Rules are in [AGENTS.md](../AGENTS.md#version-control-use-git
 - commit only on the owner's request;
 - never commit `captures/`, `artifacts/`, Fuji binaries, firmware or decompiled code;
 - no destructive git commands without asking;
-- the branch is `master`. It is pushed to the private GitHub repo `nacs-970/fuji-xa-5` (`origin`), and
+- the branch is `master`. It is pushed to the public GitHub repo `nacs-970/fuji-xa-5` (`origin`), and
   pushes happen only on the owner's request.
 
 ## Road map
@@ -88,7 +88,6 @@ The repo uses git. Rules are in [AGENTS.md](../AGENTS.md#version-control-use-git
 
 ## Open decisions
 
-- License: depends on whether the code goes upstream into libgphoto2 (LGPL-2.1-or-later) or ships alone.
-- Client language: Python for probes now, something packaged for `src/` later.
-- Branch name (`master` or `main`) and when to make the GitHub repo public: not decided. The repo is private
-  for now.
+- Decided: licence MIT (2026-10-08), client language Python, branch `master`, the GitHub repo is public since
+  2026-10-14.
+- Open: whether to send a libgphoto2 patch (it would go under that project's licence).

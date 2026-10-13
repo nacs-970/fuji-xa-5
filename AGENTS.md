@@ -26,8 +26,9 @@ Wi-Fi. The next steps are a clean client in `src/` and a libgphoto2 patch.
 - Fuji's X-A5 manual is not committed (owner decision, 2026-10-08). A local copy lives in the git-ignored
   `artifacts/x-a5-manual/`. Cite the official PDF in `docs/references.md` instead. Put nothing else from Fuji in
   the tracked tree.
-- The branch is `master`. The remote `origin` is the private GitHub repo `nacs-970/fuji-xa-5`. Push only when
-  the owner asks. Do not rename the branch, make the repo public or add a tag unless asked.
+- The branch is `master`. The remote `origin` is the public GitHub repo `nacs-970/fuji-xa-5` (public since
+  2026-10-14). Push only when the owner asks. Do not rename the branch, change the repo's visibility or add a tag
+  unless asked. Everything pushed is public: check a change for serial numbers, MAC addresses and Fuji material first.
 
 ## Rules for touching the camera
 
